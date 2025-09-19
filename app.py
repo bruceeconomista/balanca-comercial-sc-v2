@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import os
 import altair as alt
 import plotly.express as px
 import sys
@@ -14,100 +13,80 @@ try:
 
     st.title("Balança Comercial de Santa Catarina")
 
-    # Nomes dos arquivos
-    EXP_FILE = "EXP_TOTAL.parquet"
-    IMP_FILE = "IMP_TOTAL.parquet"
-    PARQUET_FOLDER = "parquet_files"
-
-    def load_data():
-        """Carrega os dados dos arquivos Parquet."""
+    @st.cache_data
+    def load_data(exp_file, imp_file):
+        """
+        Carrega os dados dos arquivos Parquet enviados pelo usuário.
+        Usa o cache do Streamlit para evitar recarregar a cada interação.
+        """
+        if exp_file is None or imp_file is None:
+            return pd.DataFrame(), pd.DataFrame()
+        
         try:
-            exp_path = os.path.join(PARQUET_FOLDER, EXP_FILE)
-            imp_path = os.path.join(PARQUET_FOLDER, IMP_FILE)
-
-            df_exp = pd.read_parquet(exp_path)
-            df_imp = pd.read_parquet(imp_path)
+            df_exp = pd.read_parquet(exp_file)
+            df_imp = pd.read_parquet(imp_file)
             
-            # Limpar os nomes das colunas (BOM: proteger caso já limpo)
+            # Limpar os nomes das colunas
             df_exp.columns = [col.replace('ï»¿', '') for col in df_exp.columns]
             df_imp.columns = [col.replace('ï»¿', '') for col in df_imp.columns]
             
             return df_exp, df_imp
-        except FileNotFoundError:
-            st.error("Erro: Os arquivos .parquet não foram encontrados. Certifique-se de que estão na pasta 'parquet_files'.")
+        except Exception as e:
+            st.error(f"Erro ao ler os arquivos Parquet. Verifique se os arquivos estão corretos: {e}")
             st.stop()
             return pd.DataFrame(), pd.DataFrame()
 
-    df_exp, df_imp = load_data()
+    # --- Upload de Arquivos ---
+    st.sidebar.subheader("Carregar Arquivos de Dados")
+    uploaded_exp_file = st.sidebar.file_uploader("Selecione o arquivo de Exportações (.parquet)", type="parquet")
+    uploaded_imp_file = st.sidebar.file_uploader("Selecione o arquivo de Importações (.parquet)", type="parquet")
 
-    # Combinar os dataframes para obter os anos disponíveis (somente para informação/comparação)
-    if not df_exp.empty and not df_imp.empty:
-        df_geral = pd.concat([df_exp, df_imp], ignore_index=True)
-        anos_validos = sorted(df_geral['CO_ANO'].unique().tolist())
-    elif not df_exp.empty:
-        df_geral = df_exp.copy()
-        anos_validos = sorted(df_exp['CO_ANO'].unique().tolist())
-    elif not df_imp.empty:
-        df_geral = df_imp.copy()
-        anos_validos = sorted(df_imp['CO_ANO'].unique().tolist())
-    else:
-        df_geral = pd.DataFrame()
-        anos_validos = []
+    df_exp, df_imp = load_data(uploaded_exp_file, uploaded_imp_file)
 
-    # Se quiser mostrar qual o ano mais recente (apenas informativo)
+    if df_exp.empty or df_imp.empty:
+        st.info("Por favor, carregue os arquivos de dados de exportação e importação para começar a análise.")
+        st.stop()
+
+    # Combinar os dataframes para obter os anos disponíveis
+    df_geral = pd.concat([df_exp, df_imp], ignore_index=True)
+    anos_validos = sorted(df_geral['CO_ANO'].unique().tolist())
+    
+    # Informação sobre o ano mais recente
     if anos_validos:
         ano_mais_recente = anos_validos[-1]
-        st.info(f"Análise usando todos os anos disponíveis. Ano mais recente no dataset: **{ano_mais_recente}**")
+        st.info(f"Análise usando todos os anos disponíveis. Anos no dataset: **{', '.join(map(str, anos_validos))}**")
     else:
         st.warning("Não foi possível determinar os anos do conjunto de dados.")
 
-    # --- 1. Filtros na Primeira Linha (removido filtro por ano) ---
-    col1, col2 = st.columns(2)
+    # --- 1. Filtros na Primeira Linha ---
+    col1, col2 = st.columns([1, 2])
 
     with col1:
-        if not df_exp.empty:
-            all_ufs = sorted(df_exp['SG_UF_NCM'].dropna().unique().tolist())
-            default_ufs = ['SC'] if 'SC' in all_ufs else all_ufs
-            selected_ufs = st.multiselect(
-                "Selecione os Estados (UF)",
-                options=all_ufs,
-                default=default_ufs
-            )
-        else:
-            selected_ufs = []
+        all_ufs = sorted(df_exp['SG_UF_NCM'].dropna().unique().tolist())
+        default_ufs = ['SC'] if 'SC' in all_ufs else all_ufs
+        selected_ufs = st.multiselect(
+            "Selecione os Estados (UF)",
+            options=all_ufs,
+            default=default_ufs
+        )
 
-    # Observação: não existe mais widget de seleção de ano — removido intencionalmente.
     with col2:
-        if anos_validos:
-            st.write(f"Amostra contém anos: {', '.join(map(str, anos_validos))}")
-        else:
-            st.write("Sem informação de anos nos dados.")
+        st.write(f"Amostra contém anos: {', '.join(map(str, anos_validos))}")
 
     # Cria os dataframes filtrados para os cards, gráficos e tabelas principais
-    # NOTE: removi a filtragem por CO_ANO aqui, já que você declarou que não quer filtro por ano
-    if not df_exp.empty:
-        if selected_ufs:
-            df_exp_filtered_sc = df_exp[df_exp['SG_UF_NCM'].isin(selected_ufs)].copy()
-        else:
-            df_exp_filtered_sc = df_exp.copy()
+    if selected_ufs:
+        df_exp_filtered_sc = df_exp[df_exp['SG_UF_NCM'].isin(selected_ufs)].copy()
+        df_imp_filtered_sc = df_imp[df_imp['SG_UF_NCM'].isin(selected_ufs)].copy()
     else:
-        df_exp_filtered_sc = pd.DataFrame()
-
-    if not df_imp.empty:
-        if selected_ufs:
-            df_imp_filtered_sc = df_imp[df_imp['SG_UF_NCM'].isin(selected_ufs)].copy()
-        else:
-            df_imp_filtered_sc = df_imp.copy()
-    else:
-        df_imp_filtered_sc = pd.DataFrame()
+        df_exp_filtered_sc = df_exp.copy()
+        df_imp_filtered_sc = df_imp.copy()
 
     # --- 2. Cards de resumo ---
     st.markdown("---")
     col3, col4, col5 = st.columns(3)
 
-    # Cálculo dos totais (usando todos os anos, filtrados por UF se aplicado)
-    total_exp = df_exp_filtered_sc['VL_FOB'].sum() if not df_exp_filtered_sc.empty else 0
-    total_imp = df_imp_filtered_sc['VL_FOB'].sum() if not df_imp_filtered_sc.empty else 0
+    total_exp = df_exp_filtered_sc['VL_FOB'].sum()
+    total_imp = df_imp_filtered_sc['VL_FOB'].sum()
     balanca_comercial = total_exp - total_imp
 
     def format_currency(value):
@@ -131,6 +110,31 @@ try:
             value=format_currency(balanca_comercial)
         )
 
+    # --- Nova Seção: Análise de Séries Temporais ---
+    st.markdown("---")
+    st.header("Evolução da Balança Comercial por Ano")
+    
+    if not df_exp_filtered_sc.empty and not df_imp_filtered_sc.empty:
+        # Agrupar por ano para o gráfico de linhas
+        df_exp_anual = df_exp_filtered_sc.groupby('CO_ANO')['VL_FOB'].sum().reset_index()
+        df_exp_anual['Tipo'] = 'Exportação'
+        df_imp_anual = df_imp_filtered_sc.groupby('CO_ANO')['VL_FOB'].sum().reset_index()
+        df_imp_anual['Tipo'] = 'Importação'
+        
+        df_anual = pd.concat([df_exp_anual, df_imp_anual])
+        
+        line_chart = alt.Chart(df_anual).mark_line().encode(
+            x=alt.X('CO_ANO:O', title='Ano'),
+            y=alt.Y('VL_FOB', title='Valor FOB (US$)', axis=alt.Axis(format='~s')),
+            color='Tipo:N',
+            tooltip=[alt.Tooltip('CO_ANO', title='Ano'), alt.Tooltip('Tipo'), alt.Tooltip('VL_FOB', title='Valor FOB (US$)', format=',.2f')]
+        ).properties(
+            title='Evolução de Exportações e Importações ao Longo dos Anos'
+        ).interactive()
+        st.altair_chart(line_chart, use_container_width=True)
+    else:
+        st.info("Não há dados de exportação e importação para gerar o gráfico anual.")
+
     # --- 3. Análise Gráfica (Produtos) ---
     st.markdown("---")
     col6, col7 = st.columns(2)
@@ -143,7 +147,7 @@ try:
         return str(value)
 
     with col6:
-        st.subheader("TAREFA 1 - Produtos Mais Exportados - Valor padrão = 5")
+        st.subheader("Produtos Mais Exportados")
         num_products_exp = st.slider(
             "Número de produtos a exibir (exportação)", min_value=0, max_value=50, value=5, key='slider_exp'
         )
@@ -176,7 +180,7 @@ try:
 
 
     with col7:
-        st.subheader("Produtos Mais Importados - Valor padrão = 5")
+        st.subheader("Produtos Mais Importados")
         num_products_imp = st.slider(
             "Número de produtos a exibir (importação)", min_value=0, max_value=50, value=5, key='slider_imp'
         )
@@ -212,7 +216,6 @@ try:
     st.header("TAREFA 1 - Fluxo de Exportação para os principais produtos")
     col8, col9 = st.columns(2)
 
-    # Filtrar o DataFrame por produtos selecionados antes de agrupar para o treemap
     df_exp_filtered_products = df_exp_filtered_sc[df_exp_filtered_sc['NO_NCM_POR'].isin(top_exp_products)]
     df_imp_filtered_products = df_imp_filtered_sc[df_imp_filtered_sc['NO_NCM_POR'].isin(top_imp_products)]
 
@@ -282,34 +285,19 @@ try:
 
     col10, col11 = st.columns(2)
 
-    # Lógica dinâmica para anos de referência (usada apenas aqui)
-    anos_para_comparar_exp = sorted(df_exp['CO_ANO'].dropna().unique().tolist()) if not df_exp.empty else []
-    if len(anos_para_comparar_exp) >= 2:
-        anos_ref_exp = anos_para_comparar_exp[-2:]
-    else:
-        anos_ref_exp = anos_para_comparar_exp.copy()
-
-    anos_para_comparar_imp = sorted(df_imp['CO_ANO'].dropna().unique().tolist()) if not df_imp.empty else []
-    if len(anos_para_comparar_imp) >= 2:
-        anos_ref_imp = anos_para_comparar_imp[-2:]
-    else:
-        anos_ref_imp = anos_para_comparar_imp.copy()
+    # Lógica aprimorada para selecionar anos de referência
+    anos_ref_exp = sorted(df_exp['CO_ANO'].unique().tolist())
+    anos_ref_imp = sorted(df_imp['CO_ANO'].unique().tolist())
 
     # Tabela de exportação
     with col10:
         st.subheader("10 Maiores Destinos de Exportação / Variações Interanuais")
-        if not df_exp.empty:
-            # filtrar por UF se selecionado
-            if selected_ufs:
-                df_exp_scope = df_exp[df_exp['SG_UF_NCM'].isin(selected_ufs)].copy()
-            else:
-                df_exp_scope = df_exp.copy()
-
-            if anos_ref_exp:
-                df_exp_agg = df_exp_scope[df_exp_scope['CO_ANO'].isin(anos_ref_exp)]
-            else:
-                df_exp_agg = df_exp_scope.copy()
-
+        if len(anos_ref_exp) < 2:
+            st.info("É necessário pelo menos dois anos de dados para calcular variações interanuais.")
+        elif not df_exp.empty:
+            df_exp_scope = df_exp[df_exp['SG_UF_NCM'].isin(selected_ufs)].copy() if selected_ufs else df_exp.copy()
+            df_exp_agg = df_exp_scope[df_exp_scope['CO_ANO'].isin(anos_ref_exp)]
+            
             if not df_exp_agg.empty:
                 df_exp_agg = df_exp_agg.groupby(['CO_ANO', 'NO_PAIS'], dropna=False).agg(
                     VL_FOB=('VL_FOB', 'sum'),
@@ -321,73 +309,55 @@ try:
                 df_pivot = df_pivot.reset_index()
 
                 for ano in anos_ref_exp:
-                    if f'VL_FOB_{ano}' in df_pivot.columns and f'KG_LIQUIDO_{ano}' in df_pivot.columns:
+                    col_fob = f'VL_FOB_{ano}'
+                    col_kg = f'KG_LIQUIDO_{ano}'
+                    if col_fob in df_pivot.columns and col_kg in df_pivot.columns:
                         df_pivot[f'Preço Médio {ano} (US$/Kg)'] = df_pivot.apply(
-                            lambda row: row[f'VL_FOB_{ano}'] / row[f'KG_LIQUIDO_{ano}'] if row[f'KG_LIQUIDO_{ano}'] > 0 else 0,
+                            lambda row: row[col_fob] / row[col_kg] if row[col_kg] > 0 else 0,
                             axis=1
                         )
 
-                # se há 2 anos, cria variação percentual entre esses dois anos (etiqueta genérica)
-                if len(anos_ref_exp) == 2:
-                    ano_base, ano_atual = anos_ref_exp
+                if len(anos_ref_exp) >= 2:
+                    ano_base, ano_atual = anos_ref_exp[-2], anos_ref_exp[-1]
+                    col_preco_base = f'Preço Médio {ano_base} (US$/Kg)'
+                    col_preco_atual = f'Preço Médio {ano_atual} (US$/Kg)'
                     label_var = f'Var. Preço {ano_atual}/{ano_base} (%)'
-                    if f'Preço Médio {ano_base} (US$/Kg)' in df_pivot.columns and f'Preço Médio {ano_atual} (US$/Kg)' in df_pivot.columns:
+                    if col_preco_base in df_pivot.columns and col_preco_atual in df_pivot.columns:
                         df_pivot[label_var] = df_pivot.apply(
-                            lambda row: ((row[f'Preço Médio {ano_atual} (US$/Kg)'] - row[f'Preço Médio {ano_base} (US$/Kg)']) / row[f'Preço Médio {ano_base} (US$/Kg)'] * 100) if row[f'Preço Médio {ano_base} (US$/Kg)'] > 0 else 0,
+                            lambda row: ((row[col_preco_atual] - row[col_preco_base]) / row[col_preco_base] * 100) if row[col_preco_base] > 0 else 0,
                             axis=1
                         )
+                    else:
+                        label_var = None
                 else:
                     label_var = None
 
-                # participação com base no último ano disponível na lista anos_ref_exp (se houver)
-                if anos_ref_exp:
-                    ultimo_ano = anos_ref_exp[-1]
-                    total_fob_ultimo_ano = df_pivot.get(f'VL_FOB_{ultimo_ano}', pd.Series([0])).sum()
-                    df_pivot['Participacao (%)'] = (df_pivot.get(f'VL_FOB_{ultimo_ano}', 0) / total_fob_ultimo_ano) * 100 if total_fob_ultimo_ano > 0 else 0
-                else:
-                    df_pivot['Participacao (%)'] = 0
+                ultimo_ano = anos_ref_exp[-1]
+                total_fob_ultimo_ano = df_pivot.get(f'VL_FOB_{ultimo_ano}', pd.Series([0])).sum()
+                df_pivot['Participacao (%)'] = (df_pivot.get(f'VL_FOB_{ultimo_ano}', 0) / total_fob_ultimo_ano) * 100 if total_fob_ultimo_ano > 0 else 0
 
-                top_10_exp = df_pivot.nlargest(10, f'VL_FOB_{anos_ref_exp[-1]}' if anos_ref_exp else 'Participacao (%)').reset_index(drop=True)
+                sort_key_exp = f'VL_FOB_{ultimo_ano}' if f'VL_FOB_{ultimo_ano}' in df_pivot.columns else 'Participacao (%)'
+                top_10_exp = df_pivot.nlargest(10, sort_key_exp).reset_index(drop=True)
 
-                # Ajuste para renomear colunas apenas se existirem
-                rename_map_exp = {}
-                if 'NO_PAIS' in top_10_exp.columns:
-                    rename_map_exp['NO_PAIS'] = 'País'
-                if anos_ref_exp:
-                    if f'VL_FOB_{anos_ref_exp[-1]}' in top_10_exp.columns:
-                        rename_map_exp[f'VL_FOB_{anos_ref_exp[-1]}'] = 'Valor FOB (US$)'
-                    if f'KG_LIQUIDO_{anos_ref_exp[-1]}' in top_10_exp.columns:
-                        rename_map_exp[f'KG_LIQUIDO_{anos_ref_exp[-1]}'] = 'Total Kg'
-
+                rename_map_exp = {'NO_PAIS': 'País', f'VL_FOB_{ultimo_ano}': 'Valor FOB (US$)', f'KG_LIQUIDO_{ultimo_ano}': 'Total Kg'}
                 top_10_exp = top_10_exp.rename(columns=rename_map_exp)
 
-                # Seleção segura de colunas para exibir
-                columns_to_display_exp = []
-                if 'País' in top_10_exp.columns:
-                    columns_to_display_exp.append('País')
-                if 'Valor FOB (US$)' in top_10_exp.columns:
-                    columns_to_display_exp.append('Valor FOB (US$)')
-                if 'Total Kg' in top_10_exp.columns:
-                    columns_to_display_exp.append('Total Kg')
-                if 'Participacao (%)' in top_10_exp.columns:
-                    columns_to_display_exp.append('Participacao (%)')
-                for ano in anos_ref_exp:
-                    col_nome = f'Preço Médio {ano} (US$/Kg)'
-                    if col_nome in top_10_exp.columns:
-                        columns_to_display_exp.append(col_nome)
+                columns_to_display_exp = ['País', 'Valor FOB (US$)', 'Total Kg', 'Participacao (%)']
+                if len(anos_ref_exp) >= 2:
+                    for ano in [anos_ref_exp[-2], anos_ref_exp[-1]]:
+                        col_nome = f'Preço Médio {ano} (US$/Kg)'
+                        if col_nome in top_10_exp.columns:
+                            columns_to_display_exp.append(col_nome)
                 if label_var and label_var in top_10_exp.columns:
                     columns_to_display_exp.append(label_var)
 
                 top_10_exp_display = top_10_exp[columns_to_display_exp]
 
-                # formatação: só inclua chaves que realmente existem
-                fmt_map = {}
-                if 'Valor FOB (US$)' in top_10_exp_display.columns:
-                    fmt_map['Valor FOB (US$)'] = '{:,.2f}'
-                if 'Total Kg' in top_10_exp_display.columns:
-                    fmt_map['Total Kg'] = '{:,.0f}'
-                if 'Participacao (%)' in top_10_exp_display.columns:
-                    fmt_map['Participacao (%)'] = '{:.2f}%'
+                fmt_map = {
+                    'Valor FOB (US$)': '{:,.2f}',
+                    'Total Kg': '{:,.0f}',
+                    'Participacao (%)': '{:.2f}%'
+                }
                 for ano in anos_ref_exp:
                     col_nome = f'Preço Médio {ano} (US$/Kg)'
                     if col_nome in top_10_exp_display.columns:
@@ -395,28 +365,21 @@ try:
                 if label_var and label_var in top_10_exp_display.columns:
                     fmt_map[label_var] = '{:.2f}%'
 
-                st.dataframe(
-                    top_10_exp_display.style.format(fmt_map),
-                    use_container_width=True
-                )
+                st.dataframe(top_10_exp_display.style.format(fmt_map), use_container_width=True)
             else:
-                st.info("Não há dados de exportação para os anos de referência na seleção atual.")
+                st.info("Não há dados de exportação para a seleção atual.")
         else:
             st.info("Não há dados de exportação para a seleção atual.")
+
 
     # Tabela de importação (mesma lógica)
     with col11:
         st.subheader("10 Maiores Destinos de Importação / Variações Interanuais")
-        if not df_imp.empty:
-            if selected_ufs:
-                df_imp_scope = df_imp[df_imp['SG_UF_NCM'].isin(selected_ufs)].copy()
-            else:
-                df_imp_scope = df_imp.copy()
-
-            if anos_ref_imp:
-                df_imp_agg = df_imp_scope[df_imp_scope['CO_ANO'].isin(anos_ref_imp)]
-            else:
-                df_imp_agg = df_imp_scope.copy()
+        if len(anos_ref_imp) < 2:
+            st.info("É necessário pelo menos dois anos de dados para calcular variações interanuais.")
+        elif not df_imp.empty:
+            df_imp_scope = df_imp[df_imp['SG_UF_NCM'].isin(selected_ufs)].copy() if selected_ufs else df_imp.copy()
+            df_imp_agg = df_imp_scope[df_imp_scope['CO_ANO'].isin(anos_ref_imp)]
 
             if not df_imp_agg.empty:
                 df_imp_agg = df_imp_agg.groupby(['CO_ANO', 'NO_PAIS'], dropna=False).agg(
@@ -429,69 +392,55 @@ try:
                 df_imp_pivot = df_imp_pivot.reset_index()
 
                 for ano in anos_ref_imp:
-                    if f'VL_FOB_{ano}' in df_imp_pivot.columns and f'KG_LIQUIDO_{ano}' in df_imp_pivot.columns:
+                    col_fob = f'VL_FOB_{ano}'
+                    col_kg = f'KG_LIQUIDO_{ano}'
+                    if col_fob in df_imp_pivot.columns and col_kg in df_imp_pivot.columns:
                         df_imp_pivot[f'Preço Médio {ano} (US$/Kg)'] = df_imp_pivot.apply(
-                            lambda row: row[f'VL_FOB_{ano}'] / row[f'KG_LIQUIDO_{ano}'] if row[f'KG_LIQUIDO_{ano}'] > 0 else 0,
+                            lambda row: row[col_fob] / row[col_kg] if row[col_kg] > 0 else 0,
                             axis=1
                         )
-
-                if len(anos_ref_imp) == 2:
-                    ano_base, ano_atual = anos_ref_imp
-                    label_var_imp = f'Var. Preço {ano_atual}/{ano_base} (%)'
-                    if f'Preço Médio {ano_base} (US$/Kg)' in df_imp_pivot.columns and f'Preço Médio {ano_atual} (US$/Kg)' in df_imp_pivot.columns:
+                
+                if len(anos_ref_imp) >= 2:
+                    ano_base_imp, ano_atual_imp = anos_ref_imp[-2], anos_ref_imp[-1]
+                    col_preco_base_imp = f'Preço Médio {ano_base_imp} (US$/Kg)'
+                    col_preco_atual_imp = f'Preço Médio {ano_atual_imp} (US$/Kg)'
+                    label_var_imp = f'Var. Preço {ano_atual_imp}/{ano_base_imp} (%)'
+                    if col_preco_base_imp in df_imp_pivot.columns and col_preco_atual_imp in df_imp_pivot.columns:
                         df_imp_pivot[label_var_imp] = df_imp_pivot.apply(
-                            lambda row: ((row[f'Preço Médio {ano_atual} (US$/Kg)'] - row[f'Preço Médio {ano_base} (US$/Kg)']) / row[f'Preço Médio {ano_base} (US$/Kg)'] * 100) if row[f'Preço Médio {ano_base} (US$/Kg)'] > 0 else 0,
+                            lambda row: ((row[col_preco_atual_imp] - row[col_preco_base_imp]) / row[col_preco_base_imp] * 100) if row[col_preco_base_imp] > 0 else 0,
                             axis=1
                         )
+                    else:
+                        label_var_imp = None
                 else:
                     label_var_imp = None
 
-                if anos_ref_imp:
-                    ultimo_ano_imp = anos_ref_imp[-1]
-                    total_imp_ultimo_ano = df_imp_pivot.get(f'VL_FOB_{ultimo_ano_imp}', pd.Series([0])).sum()
-                    df_imp_pivot['Participacao (%)'] = (df_imp_pivot.get(f'VL_FOB_{ultimo_ano_imp}', 0) / total_imp_ultimo_ano) * 100 if total_imp_ultimo_ano > 0 else 0
-                else:
-                    df_imp_pivot['Participacao (%)'] = 0
+                ultimo_ano_imp = anos_ref_imp[-1]
+                total_imp_ultimo_ano = df_imp_pivot.get(f'VL_FOB_{ultimo_ano_imp}', pd.Series([0])).sum()
+                df_imp_pivot['Participacao (%)'] = (df_imp_pivot.get(f'VL_FOB_{ultimo_ano_imp}', 0) / total_imp_ultimo_ano) * 100 if total_imp_ultimo_ano > 0 else 0
 
-                top_10_imp = df_imp_pivot.nlargest(10, f'VL_FOB_{anos_ref_imp[-1]}' if anos_ref_imp else 'Participacao (%)').reset_index(drop=True)
+                sort_key_imp = f'VL_FOB_{ultimo_ano_imp}' if f'VL_FOB_{ultimo_ano_imp}' in df_imp_pivot.columns else 'Participacao (%)'
+                top_10_imp = df_imp_pivot.nlargest(10, sort_key_imp).reset_index(drop=True)
 
-                # renomeação segura
-                rename_map_imp = {}
-                if 'NO_PAIS' in top_10_imp.columns:
-                    rename_map_imp['NO_PAIS'] = 'País'
-                if anos_ref_imp:
-                    if f'VL_FOB_{anos_ref_imp[-1]}' in top_10_imp.columns:
-                        rename_map_imp[f'VL_FOB_{anos_ref_imp[-1]}'] = 'Valor FOB (US$)'
-                    if f'KG_LIQUIDO_{anos_ref_imp[-1]}' in top_10_imp.columns:
-                        rename_map_imp[f'KG_LIQUIDO_{anos_ref_imp[-1]}'] = 'Total Kg'
-
+                rename_map_imp = {'NO_PAIS': 'País', f'VL_FOB_{ultimo_ano_imp}': 'Valor FOB (US$)', f'KG_LIQUIDO_{ultimo_ano_imp}': 'Total Kg'}
                 top_10_imp = top_10_imp.rename(columns=rename_map_imp)
 
-                columns_to_display_imp = []
-                if 'País' in top_10_imp.columns:
-                    columns_to_display_imp.append('País')
-                if 'Valor FOB (US$)' in top_10_imp.columns:
-                    columns_to_display_imp.append('Valor FOB (US$)')
-                if 'Total Kg' in top_10_imp.columns:
-                    columns_to_display_imp.append('Total Kg')
-                if 'Participacao (%)' in top_10_imp.columns:
-                    columns_to_display_imp.append('Participacao (%)')
-                for ano in anos_ref_imp:
-                    col_nome = f'Preço Médio {ano} (US$/Kg)'
-                    if col_nome in top_10_imp.columns:
-                        columns_to_display_imp.append(col_nome)
+                columns_to_display_imp = ['País', 'Valor FOB (US$)', 'Total Kg', 'Participacao (%)']
+                if len(anos_ref_imp) >= 2:
+                    for ano in [anos_ref_imp[-2], anos_ref_imp[-1]]:
+                        col_nome = f'Preço Médio {ano} (US$/Kg)'
+                        if col_nome in top_10_imp.columns:
+                            columns_to_display_imp.append(col_nome)
                 if label_var_imp and label_var_imp in top_10_imp.columns:
                     columns_to_display_imp.append(label_var_imp)
-
+                
                 top_10_imp_display = top_10_imp[columns_to_display_imp]
 
-                fmt_map_imp = {}
-                if 'Valor FOB (US$)' in top_10_imp_display.columns:
-                    fmt_map_imp['Valor FOB (US$)'] = '{:,.2f}'
-                if 'Total Kg' in top_10_imp_display.columns:
-                    fmt_map_imp['Total Kg'] = '{:,.0f}'
-                if 'Participacao (%)' in top_10_imp_display.columns:
-                    fmt_map_imp['Participacao (%)'] = '{:.2f}%'
+                fmt_map_imp = {
+                    'Valor FOB (US$)': '{:,.2f}',
+                    'Total Kg': '{:,.0f}',
+                    'Participacao (%)': '{:.2f}%'
+                }
                 for ano in anos_ref_imp:
                     col_nome = f'Preço Médio {ano} (US$/Kg)'
                     if col_nome in top_10_imp_display.columns:
@@ -499,12 +448,9 @@ try:
                 if label_var_imp and label_var_imp in top_10_imp_display.columns:
                     fmt_map_imp[label_var_imp] = '{:.2f}%'
 
-                st.dataframe(
-                    top_10_imp_display.style.format(fmt_map_imp),
-                    use_container_width=True
-                )
+                st.dataframe(top_10_imp_display.style.format(fmt_map_imp), use_container_width=True)
             else:
-                st.info("Não há dados de importação para os anos de referência na seleção atual.")
+                st.info("Não há dados de importação para a seleção atual.")
         else:
             st.info("Não há dados de importação para a seleção atual.")
 
