@@ -1,0 +1,52 @@
+[
+    {
+        "NO_PAIS":"China",
+        "VL_FOB":104324811805,
+        "KG_LIQUIDO":412768292768
+    },
+    {
+        "NO_PAIS":"Estados Unidos",
+        "VL_FOB":36915459733,
+        "KG_LIQUIDO":37012231492
+    },
+    {
+        "NO_PAIS":"Argentina",
+        "VL_FOB":16712209284,
+        "KG_LIQUIDO":12597546285
+    },
+    {
+        "NO_PAIS":"Pa\u00edses Baixos (Holanda)",
+        "VL_FOB":12148381795,
+        "KG_LIQUIDO":24234520049
+    },
+    {
+        "NO_PAIS":"M\u00e9xico",
+        "VL_FOB":8571678431,
+        "KG_LIQUIDO":9337762967
+    },
+    {
+        "NO_PAIS":"Chile",
+        "VL_FOB":7944784712,
+        "KG_LIQUIDO":8092326925
+    },
+    {
+        "NO_PAIS":"Espanha",
+        "VL_FOB":7858769806,
+        "KG_LIQUIDO":15038718905
+    },
+    {
+        "NO_PAIS":"Singapura",
+        "VL_FOB":7459246165,
+        "KG_LIQUIDO":12079354574
+    },
+    {
+        "NO_PAIS":"Jap\u00e3o",
+        "VL_FOB":6620217025,
+        "KG_LIQUIDO":22720975124
+    },
+    {
+        "NO_PAIS":"Canad\u00e1",
+        "VL_FOB":5772279323,
+        "KG_LIQUIDO":8156992369
+    }
+]

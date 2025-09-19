@@ -1,0 +1,52 @@
+[
+    {
+        "NO_NCM_POR":"\u00d3leos brutos de petr\u00f3leo",
+        "VL_FOB":44963878520,
+        "KG_LIQUIDO":89170332509
+    },
+    {
+        "NO_NCM_POR":"Soja, mesmo triturada, exceto para semeadura",
+        "VL_FOB":42941894470,
+        "KG_LIQUIDO":98807843757
+    },
+    {
+        "NO_NCM_POR":"Min\u00e9rios de ferro e seus concentrados, exceto as piritas de ferro ustuladas (cinzas de piritas), n\u00e3o aglomerados",
+        "VL_FOB":26574698749,
+        "KG_LIQUIDO":362578268643
+    },
+    {
+        "NO_NCM_POR":"Outros a\u00e7\u00facares de cana",
+        "VL_FOB":15925320657,
+        "KG_LIQUIDO":33474593276
+    },
+    {
+        "NO_NCM_POR":"Caf\u00e9 n\u00e3o torrado, n\u00e3o descafeinado, em gr\u00e3o",
+        "VL_FOB":11331933183,
+        "KG_LIQUIDO":2767297450
+    },
+    {
+        "NO_NCM_POR":"Carnes desossadas de bovino, congeladas",
+        "VL_FOB":10049077475,
+        "KG_LIQUIDO":2236854795
+    },
+    {
+        "NO_NCM_POR":"Pastas qu\u00edmicas de madeira, \u00e0 soda ou ao sulfato, exceto pastas para dissolu\u00e7\u00e3o, semibranqueadas ou branqueadas, de n\u00e3o con\u00edferas",
+        "VL_FOB":9551859761,
+        "KG_LIQUIDO":18322102486
+    },
+    {
+        "NO_NCM_POR":"Milho em gr\u00e3o, exceto para semeadura",
+        "VL_FOB":8046317455,
+        "KG_LIQUIDO":39744475173
+    },
+    {
+        "NO_NCM_POR":"Fuel oil",
+        "VL_FOB":7375146645,
+        "KG_LIQUIDO":13430519227
+    },
+    {
+        "NO_NCM_POR":"Baga\u00e7os e outros res\u00edduos s\u00f3lidos, da extra\u00e7\u00e3o do \u00f3leo de soja",
+        "VL_FOB":7233993219,
+        "KG_LIQUIDO":17657150092
+    }
+]
