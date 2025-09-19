@@ -1,139 +1,113 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-import pydeck as pdk
-import requests
-import json
-from PIL import Image
 
-# Configuração da página
-st.set_page_config(layout="wide")
-
-# Título e descrição
-st.title("Balança Comercial de Santa Catarina")
-st.markdown("Análise dos dados de importação e exportação do estado de Santa Catarina, Brasil.")
-
-# Tentar carregar os dados
-try:
-    df_geral = pd.read_csv("https://raw.githubusercontent.com/bruceeconomista/balanca-comercial-sc-v2/main/balanca_comercial_sc.csv", sep=';', encoding='latin-1', skipinitialspace=True)
-    st.write("Dados carregados com sucesso!")
-except Exception as e:
-    st.error(f"Erro ao carregar os dados: {e}")
-    st.stop()
-
-# Tentar processar os dados
-try:
-    df_geral['CO_ANO'] = df_geral['CO_ANO'].astype(int)
-    # df_geral['DT_NCM'] = pd.to_datetime(df_geral['DT_NCM']) # Comentado para evitar erro
-    df_geral['KG_LIQUIDO'] = df_geral['KG_LIQUIDO'].astype(float)
-    df_geral['VL_FOB'] = df_geral['VL_FOB'].astype(float)
-except Exception as e:
-    st.error(f"Erro ao processar os dados: {e}")
-    st.stop()
-
-# Sidebar
-st.sidebar.header("Filtros")
-
-# Filtro de ano
-ano_selecionado = st.sidebar.slider(
-    "Ano",
-    min_value=int(df_geral['CO_ANO'].min()),
-    max_value=int(df_geral['CO_ANO'].max()),
-    value=int(df_geral['CO_ANO'].min())
+# Configura a página
+st.set_page_config(
+    page_title="Balança Comercial de Santa Catarina",
+    page_icon="🇧🇷",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Filtro de tipo de operação
-tipo_operacao = st.sidebar.radio(
-    "Tipo de Operação",
-    ('Exportação', 'Importação', 'Ambos')
-)
+# Use @st.cache_data para carregar os dados uma única vez e melhorar a performance
+@st.cache_data
+def carregar_dados():
+    # AQUI ESTÁ A MUDANÇA CRUCIAL: 'sep=;'.
+    # O arquivo CSV está formatado com ponto e vírgula, não com vírgula.
+    df = pd.read_csv('balanca_comercial_sc.csv', sep=';')
+    
+    # A seguir, uma limpeza de dados para garantir que as colunas numéricas estejam corretas
+    df['CO_ANO'] = df['CO_ANO'].astype(int)
+    df['CO_MES'] = df['CO_MES'].astype(int)
+    df['KG_LIQUIDO'] = df['KG_LIQUIDO'].astype(float)
+    df['VL_FOB'] = df['VL_FOB'].astype(float)
+    return df
 
-# Filtro de dados na tabela
-# Tentar exibir a tabela
 try:
+    df_geral = carregar_dados()
+except FileNotFoundError:
+    st.error("Erro: O arquivo 'balanca_comercial_sc.csv' não foi encontrado. Por favor, verifique se ele foi adicionado corretamente ao seu repositório.")
+    st.stop()
+    
+# Verifica se o DataFrame foi carregado corretamente
+if df_geral.empty:
+    st.error("Erro: O arquivo CSV foi lido, mas está vazio. Verifique a formatação do arquivo.")
+else:
+    # --- Sidebar ---
+    with st.sidebar:
+        st.title("Filtros")
+        
+        # Slider para selecionar o ano
+        ano_selecionado = st.slider(
+            "Ano",
+            min_value=int(df_geral['CO_ANO'].min()),
+            max_value=int(df_geral['CO_ANO'].max()),
+            value=int(df_geral['CO_ANO'].max())
+        )
+        
+    # --- Conteúdo Principal ---
+    st.title(f"Balança Comercial de SC - {ano_selecionado}")
+    
+    # Filtra os dados com base no ano selecionado
     df_filtrado = df_geral[df_geral['CO_ANO'] == ano_selecionado]
-    if tipo_operacao == 'Exportação':
-        df_filtrado = df_filtrado[df_filtrado['NO_EXP'] == 'Exportação']
-    elif tipo_operacao == 'Importação':
-        df_filtrado = df_filtrado[df_filtrado['NO_IMP'] == 'Importação']
+    
+    # Cria colunas para exibir métricas
+    col1, col2, col3 = st.columns(3)
+    
+    # CÁLCULO DAS MÉTRICAS
+    exportacao_total = df_filtrado[df_filtrado['NO_EXP'].str.strip() != '-']['VL_FOB'].sum()
+    importacao_total = df_filtrado[df_filtrado['NO_IMP'].str.strip() != '-']['VL_FOB'].sum()
+    saldo_comercial = exportacao_total - importacao_total
+    
+    with col1:
+        st.metric("Total Exportado (FOB)", f"US$ {exportacao_total:,.2f}")
+    with col2:
+        st.metric("Total Importado (FOB)", f"US$ {importacao_total:,.2f}")
+    with col3:
+        st.metric("Saldo Comercial", f"US$ {saldo_comercial:,.2f}")
+        
+    # Gráfico de barras de exportação por país
+    st.header("Top 10 Países Exportadores e Importadores")
+    
+    col4, col5 = st.columns(2)
+    
+    with col4:
+        st.subheader("Top 10 Exportações")
+        df_exp = df_filtrado[df_filtrado['NO_EXP'].str.strip() != '-']
+        if not df_exp.empty:
+            df_top_exp = df_exp.groupby('NO_PAIS_DESTINO')['VL_FOB'].sum().nlargest(10).reset_index()
+            fig_exp = px.bar(df_top_exp, x='NO_PAIS_DESTINO', y='VL_FOB', title="Exportações (FOB)",
+                             labels={'NO_PAIS_DESTINO': 'País Destino', 'VL_FOB': 'Valor FOB (US$)'})
+            st.plotly_chart(fig_exp, use_container_width=True)
+        else:
+            st.info("Não há dados de exportação para o ano selecionado.")
+            
+    with col5:
+        st.subheader("Top 10 Importações")
+        df_imp = df_filtrado[df_filtrado['NO_IMP'].str.strip() != '-']
+        if not df_imp.empty:
+            df_top_imp = df_imp.groupby('NO_PAIS_ORIGEM')['VL_FOB'].sum().nlargest(10).reset_index()
+            fig_imp = px.bar(df_top_imp, x='NO_PAIS_ORIGEM', y='VL_FOB', title="Importações (FOB)",
+                             labels={'NO_PAIS_ORIGEM': 'País Origem', 'VL_FOB': 'Valor FOB (US$)'})
+            st.plotly_chart(fig_imp, use_container_width=True)
+        else:
+            st.info("Não há dados de importação para o ano selecionado.")
 
-    st.subheader(f"Dados filtrados para o ano de {ano_selecionado}")
-    st.dataframe(df_filtrado)
-except Exception as e:
-    st.error(f"Erro ao filtrar ou exibir a tabela: {e}")
-    st.stop()
-
-
-# Gráficos
-st.write("---")
-st.subheader("Visualizações")
-
-# Gráfico de barras
-try:
-    df_barras = df_filtrado.groupby('NO_PAIS_ORIGEM').agg(
-        total_fob=('VL_FOB', 'sum')
-    ).reset_index().nlargest(10, 'total_fob')
-
-    fig_barras = px.bar(
-        df_barras,
-        x='NO_PAIS_ORIGEM',
-        y='total_fob',
-        title=f"Principais Países de Origem/Destino em {ano_selecionado}"
-    )
-    st.plotly_chart(fig_barras, use_container_width=True)
-except Exception as e:
-    st.error(f"Erro ao gerar gráfico de barras: {e}")
-
-# Gráfico de pizza
-try:
-    df_pizza = df_filtrado.groupby('NO_PRODUTO').agg(
-        total_fob=('VL_FOB', 'sum')
-    ).reset_index().nlargest(5, 'total_fob')
-
-    fig_pizza = px.pie(
-        df_pizza,
-        values='total_fob',
-        names='NO_PRODUTO',
-        title=f"Principais Produtos em {ano_selecionado}"
-    )
-    st.plotly_chart(fig_pizza, use_container_width=True)
-except Exception as e:
-    st.error(f"Erro ao gerar gráfico de pizza: {e}")
-
-
-# Mapa usando Pydeck
-try:
-    df_mapa = df_filtrado.groupby(['NO_PAIS_ORIGEM', 'SG_UF_NCM']).agg(
-        lat=('lat', 'first'),
-        lon=('lon', 'first'),
-        total_fob=('VL_FOB', 'sum')
+    # Gráfico de linhas do saldo comercial ao longo do tempo (todos os anos)
+    st.header("Saldo Comercial Anual")
+    df_agrupado = df_geral.groupby('CO_ANO').agg(
+        exportacoes=('VL_FOB', lambda x: x[df_geral.loc[x.index, 'NO_EXP'].str.strip() != '-'].sum()),
+        importacoes=('VL_FOB', lambda x: x[df_geral.loc[x.index, 'NO_IMP'].str.strip() != '-'].sum())
     ).reset_index()
+    
+    df_agrupado['saldo'] = df_agrupado['exportacoes'] - df_agrupado['importacoes']
+    
+    fig_saldo = px.line(df_agrupado, x='CO_ANO', y='saldo', title="Saldo Comercial (Exportação - Importação) ao longo dos anos")
+    fig_saldo.update_traces(mode='lines+markers')
+    st.plotly_chart(fig_saldo, use_container_width=True)
 
-    layer = pdk.Layer(
-        'HeatmapLayer',
-        data=df_mapa,
-        opacity=0.9,
-        get_position=['lon', 'lat'],
-        threshold=0.01
-    )
-
-    view_state = pdk.ViewState(
-        latitude=-27.5969,
-        longitude=-48.5495,
-        zoom=5,
-        pitch=50
-    )
-
-    r = pdk.Deck(
-        layers=[layer],
-        initial_view_state=view_state,
-        tooltip={"text": "{NO_PAIS_ORIGEM}\nTotal FOB: {total_fob}"}
-    )
-
-    st.pydeck_chart(r)
-    st.write("Mapa gerado com sucesso!")
-
-except Exception as e:
-    st.error(f"Erro ao gerar o mapa: {e}")
+    # Exibindo os dados brutos
+    st.header("Dados Brutos")
+    st.dataframe(df_filtrado)
