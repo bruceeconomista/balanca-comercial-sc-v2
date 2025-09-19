@@ -16,14 +16,25 @@ st.set_page_config(
 def carregar_dados():
     # AQUI ESTÁ A MUDANÇA CRUCIAL: 'sep=;'.
     # O arquivo CSV está formatado com ponto e vírgula, não com vírgula.
-    df = pd.read_csv('balanca_comercial_sc.csv', sep=';')
+    df = pd.read_csv('balanca_comercial_sc.csv', sep=';', on_bad_lines='skip')
     
     # A seguir, uma limpeza de dados para garantir que as colunas numéricas estejam corretas
-    df['CO_ANO'] = df['CO_ANO'].astype(int)
-    df['CO_MES'] = df['CO_MES'].astype(int)
-    df['KG_LIQUIDO'] = df['KG_LIQUIDO'].astype(float)
-    df['VL_FOB'] = df['VL_FOB'].astype(float)
-    return df
+    try:
+        df['CO_ANO'] = pd.to_numeric(df['CO_ANO'], errors='coerce').astype('Int64')
+        df['CO_MES'] = pd.to_numeric(df['CO_MES'], errors='coerce').astype('Int64')
+        df['KG_LIQUIDO'] = pd.to_numeric(df['KG_LIQUIDO'], errors='coerce').astype(float)
+        df['VL_FOB'] = pd.to_numeric(df['VL_FOB'], errors='coerce').astype(float)
+        
+        # Remove linhas com valores NaN após a conversão para evitar erros nos gráficos
+        df.dropna(subset=['CO_ANO', 'CO_MES', 'KG_LIQUIDO', 'VL_FOB'], inplace=True)
+        
+        return df
+    except KeyError as e:
+        st.error(f"Erro ao processar os dados: A coluna {e} não foi encontrada no arquivo CSV. Verifique o cabeçalho do arquivo.")
+        st.stop()
+    except Exception as e:
+        st.error(f"Erro inesperado durante o processamento de dados: {e}. Verifique se os valores nas colunas numéricas estão corretos.")
+        st.stop()
 
 try:
     df_geral = carregar_dados()
@@ -40,11 +51,14 @@ else:
         st.title("Filtros")
         
         # Slider para selecionar o ano
+        min_ano = int(df_geral['CO_ANO'].min())
+        max_ano = int(df_geral['CO_ANO'].max())
+        
         ano_selecionado = st.slider(
             "Ano",
-            min_value=int(df_geral['CO_ANO'].min()),
-            max_value=int(df_geral['CO_ANO'].max()),
-            value=int(df_geral['CO_ANO'].max())
+            min_value=min_ano,
+            max_value=max_ano,
+            value=max_ano
         )
         
     # --- Conteúdo Principal ---
