@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 import plotly.express as px
+import os
 
 try:
     st.set_page_config(
@@ -11,52 +12,45 @@ try:
 
     st.title("Balança Comercial de Santa Catarina")
 
+    # Define o caminho dos arquivos
+    exp_file_path = "parquet_files/EXP_TOTAL.parquet"
+    imp_file_path = "parquet_files/IMP_TOTAL.parquet"
+    
+    st.write(f"Verificando a existência dos arquivos...")
+    
+    # Verifica se os arquivos existem no caminho esperado
+    if not os.path.exists(exp_file_path):
+        st.error(f"Erro: O arquivo '{exp_file_path}' não foi encontrado.")
+        st.stop()
+    if not os.path.exists(imp_file_path):
+        st.error(f"Erro: O arquivo '{imp_file_path}' não foi encontrado.")
+        st.stop()
+
     @st.cache_data
-    def load_data(exp_file, imp_file):
+    def load_data():
         """
-        Carrega os dados dos arquivos Parquet enviados pelo usuário.
-        Usa o cache do Streamlit para evitar recarregar a cada interação.
+        Carrega os dados dos arquivos Parquet usando o cache do Streamlit.
         """
-        # Verifica se os arquivos foram realmente enviados
-        if exp_file is None or imp_file is None:
+        try:
+            st.write("Lendo os arquivos Parquet...")
+            df_exp = pd.read_parquet(exp_file_path)
+            df_imp = pd.read_parquet(imp_file_path)
+            
+            # Limpar os nomes das colunas
+            df_exp.columns = [col.replace('ï»¿', '') for col in df_exp.columns]
+            df_imp.columns = [col.replace('ï»¿', '') for col in df_imp.columns]
+            
+            return df_exp, df_imp
+        except Exception as e:
+            st.error(f"Erro ao ler os arquivos Parquet. Detalhes: {e}")
             return pd.DataFrame(), pd.DataFrame()
 
-        # Lê os arquivos diretamente dos objetos de upload
-        df_exp = pd.read_parquet(exp_file)
-        df_imp = pd.read_parquet(imp_file)
+    with st.spinner("Carregando dados..."):
+        df_exp_total, df_imp_total = load_data()
+
+    if not df_exp_total.empty and not df_imp_total.empty:
+        st.success("Dados carregados com sucesso!")
         
-        # Limpar os nomes das colunas
-        df_exp.columns = [col.replace('ï»¿', '') for col in df_exp.columns]
-        df_imp.columns = [col.replace('ï»¿', '') for col in df_imp.columns]
-        
-        return df_exp, df_imp
-
-    # --- Upload de Arquivos
-    st.subheader("Carregar Arquivos")
-    st.write("Faça o upload dos arquivos de Exportação e Importação para análise.")
-    
-    # Adiciona os botões de upload de arquivo
-    uploaded_exp_file = st.file_uploader("Selecione o arquivo de Exportação (EXP_TOTAL.parquet)", type=['parquet'])
-    uploaded_imp_file = st.file_uploader("Selecione o arquivo de Importação (IMP_TOTAL.parquet)", type=['parquet'])
-
-    if uploaded_exp_file and uploaded_imp_file:
-        with st.spinner("Carregando dados..."):
-            df_exp_total, df_imp_total = load_data(uploaded_exp_file, uploaded_imp_file)
-        
-        if not df_exp_total.empty and not df_imp_total.empty:
-            st.success("Dados carregados com sucesso!")
-            st.session_state['df_exp_total'] = df_exp_total
-            st.session_state['df_imp_total'] = df_imp_total
-            st.session_state['data_loaded'] = True
-        else:
-            st.error("Não foi possível carregar um ou ambos os arquivos. Verifique os nomes e a estrutura.")
-    else:
-        st.info("Por favor, faça o upload dos arquivos para começar a análise.")
-
-    if 'data_loaded' in st.session_state and st.session_state['data_loaded']:
-        df_exp_total = st.session_state['df_exp_total']
-        df_imp_total = st.session_state['df_imp_total']
-
         # --- Filtros
         st.sidebar.header("Filtros")
         years_exp = sorted(df_exp_total['CO_ANO'].unique()) if 'CO_ANO' in df_exp_total.columns else []
@@ -155,7 +149,9 @@ try:
                 st.plotly_chart(fig_imp_geral, use_container_width=True)
             else:
                 st.info("Não há dados de importação para a seleção atual.")
-
+    else:
+        st.warning("Não foi possível carregar os dados. Verifique o seu repositório no GitHub para garantir que os arquivos estão presentes e que o Git LFS foi configurado corretamente.")
+        
 except Exception as e:
     st.error("Ocorreu um erro inesperado. Por favor, tente novamente mais tarde.")
     st.error(f"Detalhes do erro: {e}")
