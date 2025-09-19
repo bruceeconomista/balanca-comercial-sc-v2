@@ -16,10 +16,10 @@ st.set_page_config(
 def carregar_dados():
     # AQUI ESTÁ A MUDANÇA CRUCIAL: 'sep=;'.
     # O arquivo CSV está formatado com ponto e vírgula, não com vírgula.
-    df = pd.read_csv('balanca_comercial_sc.csv', sep=';', on_bad_lines='skip')
-    
-    # A seguir, uma limpeza de dados para garantir que as colunas numéricas estejam corretas
     try:
+        df = pd.read_csv('balanca_comercial_sc.csv', sep=';', on_bad_lines='skip')
+        
+        # A seguir, uma limpeza de dados para garantir que as colunas numéricas estejam corretas
         # Usamos pd.to_numeric para converter as colunas e coercer erros para NaN
         df['CO_ANO'] = pd.to_numeric(df['CO_ANO'], errors='coerce').astype('Int64')
         df['CO_MES'] = pd.to_numeric(df['CO_MES'], errors='coerce').astype('Int64')
@@ -43,9 +43,9 @@ except FileNotFoundError:
     st.error("Erro: O arquivo 'balanca_comercial_sc.csv' não foi encontrado. Por favor, verifique se ele foi adicionado corretamente ao seu repositório.")
     st.stop()
     
-# Verifica se o DataFrame foi carregado corretamente
-if df_geral.empty:
-    st.error("Erro: O arquivo CSV foi lido, mas está vazio. Verifique a formatação do arquivo.")
+# Verifica se o DataFrame foi carregado corretamente E se a coluna de ano não está vazia
+if df_geral.empty or df_geral['CO_ANO'].isnull().all():
+    st.error("Erro: O arquivo CSV foi lido, mas a coluna de anos está vazia ou contém apenas dados inválidos. Verifique o conteúdo do arquivo.")
 else:
     # --- Sidebar ---
     with st.sidebar:
@@ -53,14 +53,9 @@ else:
         
         # Slider para selecionar o ano
         # Verifica se a coluna 'CO_ANO' possui valores válidos antes de obter min/max
-        if not df_geral['CO_ANO'].empty and pd.api.types.is_numeric_dtype(df_geral['CO_ANO']):
-            min_ano = int(df_geral['CO_ANO'].min())
-            max_ano = int(df_geral['CO_ANO'].max())
-        else:
-            min_ano = 2020  # Valor padrão em caso de erro
-            max_ano = 2023  # Valor padrão em caso de erro
-            st.warning("Não foi possível determinar os anos do conjunto de dados. Usando valores padrão.")
-            
+        min_ano = int(df_geral['CO_ANO'].min())
+        max_ano = int(df_geral['CO_ANO'].max())
+        
         ano_selecionado = st.slider(
             "Ano",
             min_value=min_ano,
