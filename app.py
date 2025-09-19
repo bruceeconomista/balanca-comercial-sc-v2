@@ -1,142 +1,419 @@
 import streamlit as st
 import pandas as pd
+import os
+import altair as alt
 import plotly.express as px
-import plotly.graph_objects as go
+import sys
 
-# Configura a página
-st.set_page_config(
-    page_title="Balança Comercial de Santa Catarina",
-    page_icon="🇧🇷",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# O Streamlit é um framework para criar aplicativos da web com Python.
+# O `try` inicia um bloco onde tentamos executar o código. Se um erro ocorrer,
+# a execução salta para o bloco `except`.
+try:
+    st.set_page_config(
+        page_title="Análise de Balança Comercial",
+        layout="wide"
+    )
 
-# Use @st.cache_data para carregar os dados uma única vez e melhorar a performance
-@st.cache_data
-def carregar_dados():
-    try:
-        # AQUI ESTÁ A MUDANÇA CRUCIAL: 'sep=;'.
-        # O arquivo CSV está formatado com ponto e vírgula, não com vírgula.
-        # Adicionamos skipinitialspace=True para ignorar espaços após o delimitador
-        df = pd.read_csv('balanca_comercial_sc.csv', sep=';', on_bad_lines='skip', skipinitialspace=True)
-        
-        # Limpa os espaços dos nomes das colunas
-        df.columns = df.columns.str.strip()
-        
-        # A seguir, uma limpeza de dados para garantir que as colunas numéricas estejam corretas
+    st.title("Balança Comercial de Santa Catarina")
+
+    # Nomes dos arquivos
+    EXP_FILE = "EXP_TOTAL.parquet"
+    IMP_FILE = "IMP_TOTAL.parquet"
+    PARQUET_FOLDER = "parquet_files"
+
+    def load_data():
+        """Carrega os dados dos arquivos Parquet."""
         try:
-            # Força a conversão para string, remove espaços e depois converte para numérico
-            df['CO_ANO'] = pd.to_numeric(df['CO_ANO'].astype(str).str.strip(), errors='coerce')
-            df['CO_MES'] = pd.to_numeric(df['CO_MES'].astype(str).str.strip(), errors='coerce')
-            df['KG_LIQUIDO'] = pd.to_numeric(df['KG_LIQUIDO'].astype(str).str.strip(), errors='coerce')
-            df['VL_FOB'] = pd.to_numeric(df['VL_FOB'].astype(str).str.strip(), errors='coerce')
-            
-            # Remove linhas com valores NaN após a conversão para evitar erros nos gráficos
-            df.dropna(subset=['CO_ANO', 'CO_MES', 'KG_LIQUIDO', 'VL_FOB'], inplace=True)
-            
-            # Converte a coluna de ano para o tipo de dado de inteiro apropriado para o slider
-            df['CO_ANO'] = df['CO_ANO'].astype('Int64')
-            
-            return df
-        except KeyError as e:
-            st.error(f"Erro ao processar os dados: A coluna {e} não foi encontrada no arquivo CSV. Verifique o cabeçalho do arquivo.")
-            st.stop()
-        except Exception as e:
-            st.error(f"Erro inesperado durante o processamento de dados: {e}. Verifique se os valores nas colunas numéricas estão corretos.")
-            st.stop()
+            exp_path = os.path.join(PARQUET_FOLDER, EXP_FILE)
+            imp_path = os.path.join(PARQUET_FOLDER, IMP_FILE)
 
-    except FileNotFoundError:
-        st.error("Erro: O arquivo 'balanca_comercial_sc.csv' não foi encontrado. Por favor, verifique se ele foi adicionado corretamente ao seu repositório.")
-        st.stop()
+            df_exp = pd.read_parquet(exp_path)
+            df_imp = pd.read_parquet(imp_path)
+            
+            # Limpar os nomes das colunas e corrigir a codificação
+            df_exp.columns = [col.replace('ï»¿', '') for col in df_exp.columns]
+            df_imp.columns = [col.replace('ï»¿', '') for col in df_imp.columns]
+            
+            # --- CORREÇÃO DE CODIFICAÇÃO ---
+            # A codificação dos caracteres especiais deve ser corrigida em todas as colunas de texto
+            # A decodificação UTF-8 pode ser o problema aqui, vamos tentar outra abordagem
+            # ou verificar se a coluna realmente precisa de decodificação.
+            # df_exp['NO_NCM_POR'] = df_exp['NO_NCM_POR'].str.encode('latin1').str.decode('utf8')
+            # df_imp['NO_NCM_POR'] = df_imp['NO_NCM_POR'].str.encode('latin1').str.decode('utf8')
+            # df_exp['NO_PAIS'] = df_exp['NO_PAIS'].str.encode('latin1').str.decode('utf8')
+            # df_imp['NO_PAIS'] = df_imp['NO_PAIS'].str.encode('latin1').str.decode('utf8')
 
-df_geral = carregar_dados()
+            return df_exp, df_imp
+        except FileNotFoundError:
+            st.error("Erro: Os arquivos .parquet não foram encontrados. Certifique-se de que estão na pasta 'parquet_files'.")
+            st.stop()
+            return pd.DataFrame(), pd.DataFrame()
+
+    df_exp, df_imp = load_data()
+
+    # --- 1. Filtros na Primeira Linha ---
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # A verificação 'if not df_exp.empty' é crucial para evitar erros se os dados não forem carregados
+        if not df_exp.empty:
+            all_ufs = df_exp['SG_UF_NCM'].unique().tolist()
+            default_ufs = ['SC'] if 'SC' in all_ufs else all_ufs
+            selected_ufs = st.multiselect(
+                "Selecione os Estados (UF)",
+                options=all_ufs,
+                default=default_ufs
+            )
+        else:
+            selected_ufs = []
     
-# Verifica se o DataFrame foi carregado corretamente E se a coluna de ano não está vazia
-if df_geral.empty or df_geral['CO_ANO'].isnull().all():
-    st.error("Erro: O arquivo CSV foi lido, mas a coluna de anos está vazia ou contém apenas dados inválidos. Verifique o conteúdo do arquivo.")
-else:
-    # --- Sidebar ---
-    with st.sidebar:
-        st.title("Filtros")
-        
-        # Slider para selecionar o ano
-        # Verifica se a coluna 'CO_ANO' possui valores válidos antes de obter min/max
-        try:
-            min_ano = int(df_geral['CO_ANO'].min())
-            max_ano = int(df_geral['CO_ANO'].max())
-        except (ValueError, TypeError):
-            st.warning("Não foi possível determinar os anos do conjunto de dados. Usando valores padrão.")
-            min_ano = 2020  # Valor padrão em caso de erro
-            max_ano = 2023  # Valor padrão em caso de erro
+    with col2:
+        st.write("") # Espaço em branco para manter alinhamento
 
-        ano_selecionado = st.slider(
-            "Ano",
-            min_value=min_ano,
-            max_value=max_ano,
-            value=max_ano
+
+    # --- 2. Cards de resumo ---
+    st.markdown("---")
+    col3, col4, col5 = st.columns(3)
+
+    # Cria os dataframes filtrados para os cards, gráficos e tabelas principais
+    df_exp_filtered_sc = df_exp[
+        (df_exp['CO_ANO'] == 2024) &
+        (df_exp['SG_UF_NCM'].isin(selected_ufs))
+    ]
+
+    df_imp_filtered_sc = df_imp[
+        (df_imp['CO_ANO'] == 2024) &
+        (df_imp['SG_UF_NCM'].isin(selected_ufs))
+    ]
+
+    # Cálculo dos totais
+    total_exp = df_exp_filtered_sc['VL_FOB'].sum()
+    total_imp = df_imp_filtered_sc['VL_FOB'].sum()
+    balanca_comercial = total_exp - total_imp
+
+    def format_currency(value):
+        return f"${value:,.2f}"
+
+    with col3:
+        st.metric(
+            label="Total de Exportações",
+            value=format_currency(total_exp)
+        )
+
+    with col4:
+        st.metric(
+            label="Total de Importações",
+            value=format_currency(total_imp)
         )
         
-    # --- Conteúdo Principal ---
-    st.title(f"Balança Comercial de SC - {ano_selecionado}")
-    
-    # Filtra os dados com base no ano selecionado
-    df_filtrado = df_geral[df_geral['CO_ANO'] == ano_selecionado]
-    
-    # Cria colunas para exibir métricas
-    col1, col2, col3 = st.columns(3)
-    
-    # CÁLCULO DAS MÉTRICAS
-    exportacao_total = df_filtrado[df_filtrado['NO_EXP'].str.strip() != '-']['VL_FOB'].sum()
-    importacao_total = df_filtrado[df_filtrado['NO_IMP'].str.strip() != '-']['VL_FOB'].sum()
-    saldo_comercial = exportacao_total - importacao_total
-    
-    with col1:
-        st.metric("Total Exportado (FOB)", f"US$ {exportacao_total:,.2f}")
-    with col2:
-        st.metric("Total Importado (FOB)", f"US$ {importacao_total:,.2f}")
-    with col3:
-        st.metric("Saldo Comercial", f"US$ {saldo_comercial:,.2f}")
+    with col5:
+        st.metric(
+            label="Resultado da Balança Comercial",
+            value=format_currency(balanca_comercial)
+        )
+
+    # ---
+    ## Tarefa 1: Análise de Produtos e Países por Fluxo
+    # ---
+    # --- 3. Análise Gráfica (Produtos) ---
+    st.markdown("---")
+    col6, col7 = st.columns(2)
+
+    def format_value(value):
+        if value >= 1_000_000_000:
+            return f"{value / 1_000_000_000:.1f}B"
+        if value >= 1_000_000:
+            return f"{value / 1_000_000:.1f}M"
+        return str(value)
+
+    with col6:
+        st.subheader("TAREFA 1 - Produtos Mais Exportados - Valor padrão = 5")
+        num_products_exp = st.slider(
+            "Número de produtos a exibir", min_value=0, max_value=20, value=5, key='slider_exp'
+        )
         
-    # Gráfico de barras de exportação por país
-    st.header("Top 10 Países Exportadores e Importadores")
-    
-    col4, col5 = st.columns(2)
-    
-    with col4:
-        st.subheader("Top 10 Exportações")
-        df_exp = df_filtrado[df_filtrado['NO_EXP'].str.strip() != '-']
-        if not df_exp.empty:
-            df_top_exp = df_exp.groupby('NO_PAIS_DESTINO')['VL_FOB'].sum().nlargest(10).reset_index()
-            fig_exp = px.bar(df_top_exp, x='NO_PAIS_DESTINO', y='VL_FOB', title="Exportações (FOB)",
-                             labels={'NO_PAIS_DESTINO': 'País Destino', 'VL_FOB': 'Valor FOB (US$)'})
+        df_chart_exp = df_exp_filtered_sc.groupby(['CO_NCM', 'NO_NCM_POR']).agg(
+            VL_FOB=('VL_FOB', 'sum'),
+            KG_LIQUIDO=('KG_LIQUIDO', 'sum')
+        ).nlargest(num_products_exp, 'VL_FOB').reset_index()
+
+        df_chart_exp['VL_FOB_FORMATADO'] = df_chart_exp['VL_FOB'].apply(format_value)
+
+        chart_exp = alt.Chart(df_chart_exp).mark_bar().encode(
+            x=alt.X('CO_NCM:N', title='Código NCM', sort='-y'),
+            # --- CORREÇÃO DE FORMATAÇÃO DO EIXO Y ---
+            y=alt.Y('VL_FOB', title='Valor FOB (US$)', axis=alt.Axis(format='~s')),
+            tooltip=[
+                alt.Tooltip('NO_NCM_POR', title='Nome do Produto'),
+                alt.Tooltip('KG_LIQUIDO', title='Total de Kg', format=',.0f'),
+                alt.Tooltip('VL_FOB', title='Valor FOB (US$)', format=',.2f') # Removida a formatação em string para evitar erro
+            ]
+        ).properties(
+            title=f'{num_products_exp} Produtos Mais Exportados'
+        )
+        st.altair_chart(chart_exp, use_container_width=True)
+        
+        top_exp_products = df_chart_exp['NO_NCM_POR'].unique().tolist()
+
+
+    with col7:
+        st.subheader("Produtos Mais Importados - Valor padrão = 5")
+        num_products_imp = st.slider(
+            "Número de produtos a exibir", min_value=0, max_value=20, value=5, key='slider_imp'
+        )
+
+        df_chart_imp = df_imp_filtered_sc.groupby(['CO_NCM', 'NO_NCM_POR']).agg(
+            VL_FOB=('VL_FOB', 'sum'),
+            KG_LIQUIDO=('KG_LIQUIDO', 'sum')
+        ).nlargest(num_products_imp, 'VL_FOB').reset_index()
+        
+        df_chart_imp['VL_FOB_FORMATADO'] = df_chart_imp['VL_FOB'].apply(format_value)
+        
+        chart_imp = alt.Chart(df_chart_imp).mark_bar(color='#E57F84').encode(
+            x=alt.X('CO_NCM:N', title='Código NCM', sort='-y'),
+            # --- CORREÇÃO DE FORMATAÇÃO DO EIXO Y ---
+            y=alt.Y('VL_FOB', title='Valor FOB (US$)', axis=alt.Axis(format='~s')),
+            tooltip=[
+                alt.Tooltip('NO_NCM_POR', title='Nome do Produto'),
+                alt.Tooltip('KG_LIQUIDO', title='Total de Kg', format=',.0f'),
+                alt.Tooltip('VL_FOB', title='Valor FOB (US$)', format=',.2f') # Removida a formatação em string para evitar erro
+            ]
+        ).properties(
+            title=f'{num_products_imp} Produtos Mais Importados'
+        )
+        st.altair_chart(chart_imp, use_container_width=True)
+        
+        top_imp_products = df_chart_imp['NO_NCM_POR'].unique().tolist()
+
+
+    # --- 4. Treemaps de Países por Produto Selecionado ---
+    st.markdown("---")
+    st.header("TAREFA 1 - Fluxo de Exportação para os principais produtos")
+    col8, col9 = st.columns(2)
+
+    # Filtrar o DataFrame por produtos selecionados antes de agrupar para o treemap
+    df_exp_filtered_products = df_exp_filtered_sc[df_exp_filtered_sc['NO_NCM_POR'].isin(top_exp_products)]
+    df_imp_filtered_products = df_imp_filtered_sc[df_imp_filtered_sc['NO_NCM_POR'].isin(top_imp_products)]
+
+    with col8:
+        st.subheader("Exportações de Produtos por País")
+        
+        total_exp_sc = df_exp_filtered_products['VL_FOB'].sum()
+        df_treemap_exp = df_exp_filtered_products.groupby('NO_PAIS').agg(
+            VL_FOB=('VL_FOB', 'sum'),
+            KG_LIQUIDO=('KG_LIQUIDO', 'sum')
+        ).reset_index()
+
+        if total_exp_sc > 0:
+            df_treemap_exp['Participacao (%)'] = (df_treemap_exp['VL_FOB'] / total_exp_sc) * 100
+            fig_exp = px.treemap(
+                df_treemap_exp,
+                path=['NO_PAIS'],
+                values='VL_FOB',
+                title='Distribuição de Exportações por País',
+                color_discrete_sequence=px.colors.qualitative.Pastel,
+                hover_name='NO_PAIS',
+                hover_data={
+                    'VL_FOB': ':,2f',
+                    'KG_LIQUIDO': ':,0f',
+                    'Participacao (%)': ':.2f'
+                }
+            )
             st.plotly_chart(fig_exp, use_container_width=True)
         else:
-            st.info("Não há dados de exportação para o ano selecionado.")
-            
-    with col5:
-        st.subheader("Top 10 Importações")
-        df_imp = df_filtrado[df_filtrado['NO_IMP'].str.strip() != '-']
-        if not df_imp.empty:
-            df_top_imp = df_imp.groupby('NO_PAIS_ORIGEM')['VL_FOB'].sum().nlargest(10).reset_index()
-            fig_imp = px.bar(df_top_imp, x='NO_PAIS_ORIGEM', y='VL_FOB', title="Importações (FOB)",
-                             labels={'NO_PAIS_ORIGEM': 'País Origem', 'VL_FOB': 'Valor FOB (US$)'})
+            st.info("Não há dados de exportação para a seleção atual.")
+
+    with col9:
+        st.subheader("Importações de Produtos por País")
+
+        total_imp_sc = df_imp_filtered_products['VL_FOB'].sum()
+        df_treemap_imp = df_imp_filtered_products.groupby('NO_PAIS').agg(
+            VL_FOB=('VL_FOB', 'sum'),
+            KG_LIQUIDO=('KG_LIQUIDO', 'sum')
+        ).reset_index()
+
+        if total_imp_sc > 0:
+            df_treemap_imp['Participacao (%)'] = (df_treemap_imp['VL_FOB'] / total_imp_sc) * 100
+            fig_imp = px.treemap(
+                df_treemap_imp,
+                path=['NO_PAIS'],
+                values='VL_FOB',
+                title='Distribuição de Importações por País',
+                color_discrete_sequence=px.colors.qualitative.Pastel,
+                hover_name='NO_PAIS',
+                hover_data={
+                    'VL_FOB': ':,2f',
+                    'KG_LIQUIDO': ':,0f',
+                    'Participacao (%)': ':.2f'
+                }
+            )
             st.plotly_chart(fig_imp, use_container_width=True)
         else:
-            st.info("Não há dados de importação para o ano selecionado.")
+            st.info("Não há dados de importação para a seleção atual.")
 
-    # Gráfico de linhas do saldo comercial ao longo do tempo (todos os anos)
-    st.header("Saldo Comercial Anual")
-    df_agrupado = df_geral.groupby('CO_ANO').agg(
-        exportacoes=('VL_FOB', lambda x: x[df_geral.loc[x.index, 'NO_EXP'].str.strip() != '-'].sum()),
-        importacoes=('VL_FOB', lambda x: x[df_geral.loc[x.index, 'NO_IMP'].str.strip() != '-'].sum())
-    ).reset_index()
-    
-    df_agrupado['saldo'] = df_agrupado['exportacoes'] - df_agrupado['importacoes']
-    
-    fig_saldo = px.line(df_agrupado, x='CO_ANO', y='saldo', title="Saldo Comercial (Exportação - Importação) ao longo dos anos")
-    fig_saldo.update_traces(mode='lines+markers')
-    st.plotly_chart(fig_saldo, use_container_width=True)
 
-    # Exibindo os dados brutos
-    st.header("Dados Brutos")
-    st.dataframe(df_filtrado)
+    # ---
+    ## Tarefa 2: Análise de Parceiros Comerciais e Competitividade Geral
+    # ---
+    # --- 5. Tabelas dos Maiores Países e Análise de Preço ---
+    st.markdown("---")
+    st.header("TAREFA 2 - Participação de cada país no total exportado / Tabela de resultados")
+
+    col10, col11 = st.columns(2)
+
+    # Código para a tabela de exportação
+    with col10:
+        st.subheader("10 Maiores Destinos de Exportação / Variações Interanuais")
+        if not df_exp_filtered_sc.empty:
+            df_exp_agg = df_exp[(df_exp['CO_ANO'].isin([2023, 2024])) & (df_exp['SG_UF_NCM'].isin(selected_ufs))]
+            df_exp_agg = df_exp_agg.groupby(['CO_ANO', 'NO_PAIS']).agg(
+                VL_FOB=('VL_FOB', 'sum'),
+                KG_LIQUIDO=('KG_LIQUIDO', 'sum')
+            ).reset_index()
+            
+            df_pivot = df_exp_agg.pivot_table(index='NO_PAIS', columns='CO_ANO', values=['VL_FOB', 'KG_LIQUIDO']).fillna(0)
+            df_pivot.columns = [f'{metric}_{year}' for metric, year in df_pivot.columns]
+            df_pivot = df_pivot.reset_index()
+
+            df_pivot['Preço Médio 2023 (US$/Kg)'] = df_pivot.apply(
+                lambda row: row['VL_FOB_2023'] / row['KG_LIQUIDO_2023'] if row['KG_LIQUIDO_2023'] > 0 else 0, axis=1
+            )
+            df_pivot['Preço Médio 2024 (US$/Kg)'] = df_pivot.apply(
+                lambda row: row['VL_FOB_2024'] / row['KG_LIQUIDO_2024'] if row['KG_LIQUIDO_2024'] > 0 else 0, axis=1
+            )
+
+            df_pivot['Var. Preço 24/23 (%)'] = df_pivot.apply(
+                lambda row: ((row['Preço Médio 2024 (US$/Kg)'] - row['Preço Médio 2023 (US$/Kg)']) / row['Preço Médio 2023 (US$/Kg)'] * 100) if row['Preço Médio 2023 (US$/Kg)'] > 0 else 0, axis=1
+            )
+            
+            total_fob_2024 = df_pivot['VL_FOB_2024'].sum()
+            df_pivot['Participacao (%)'] = (df_pivot['VL_FOB_2024'] / total_fob_2024) * 100 if total_fob_2024 > 0 else 0
+            
+            top_10_exp = df_pivot.nlargest(10, 'VL_FOB_2024').reset_index(drop=True)
+            top_10_exp = top_10_exp.rename(columns={
+                'NO_PAIS': 'País',
+                'VL_FOB_2024': 'Valor FOB (US$)',
+                'KG_LIQUIDO_2024': 'Total Kg'
+            })
+            
+            top_10_exp_display = top_10_exp[['País', 'Valor FOB (US$)', 'Total Kg', 'Participacao (%)', 'Preço Médio 2023 (US$/Kg)', 'Preço Médio 2024 (US$/Kg)', 'Var. Preço 24/23 (%)']]
+
+            st.dataframe(
+                top_10_exp_display.style.format({
+                    'Valor FOB (US$)': '{:,.2f}',
+                    'Total Kg': '{:,.0f}',
+                    'Participacao (%)': '{:.2f}%',
+                    'Preço Médio 2023 (US$/Kg)': '{:.2f}',
+                    'Preço Médio 2024 (US$/Kg)': '{:.2f}',
+                    'Var. Preço 24/23 (%)': '{:.2f}%',
+                }),
+                use_container_width=True
+            )
+        else:
+            st.info("Não há dados de exportação para a seleção atual.")
+
+
+    # Código para a tabela de importação
+    with col11:
+        st.subheader("10 Maiores Destinos de Importação / Variações Interanuais")
+        if not df_imp_filtered_sc.empty:
+            df_imp_agg = df_imp[(df_imp['CO_ANO'].isin([2023, 2024])) & (df_imp['SG_UF_NCM'].isin(selected_ufs))]
+            df_imp_agg = df_imp_agg.groupby(['CO_ANO', 'NO_PAIS']).agg(
+                VL_FOB=('VL_FOB', 'sum'),
+                KG_LIQUIDO=('KG_LIQUIDO', 'sum')
+            ).reset_index()
+
+            df_imp_pivot = df_imp_agg.pivot_table(index='NO_PAIS', columns='CO_ANO', values=['VL_FOB', 'KG_LIQUIDO']).fillna(0)
+            df_imp_pivot.columns = [f'{metric}_{year}' for metric, year in df_imp_pivot.columns]
+            df_imp_pivot = df_imp_pivot.reset_index()
+
+            df_imp_pivot['Preço Médio 2023 (US$/Kg)'] = df_imp_pivot.apply(
+                lambda row: row['VL_FOB_2023'] / row['KG_LIQUIDO_2023'] if row['KG_LIQUIDO_2023'] > 0 else 0, axis=1
+            )
+            df_imp_pivot['Preço Médio 2024 (US$/Kg)'] = df_imp_pivot.apply(
+                lambda row: row['VL_FOB_2024'] / row['KG_LIQUIDO_2024'] if row['KG_LIQUIDO_2024'] > 0 else 0, axis=1
+            )
+            df_imp_pivot['Var. Preço 24/23 (%)'] = df_imp_pivot.apply(
+                lambda row: ((row['Preço Médio 2024 (US$/Kg)'] - row['Preço Médio 2023 (US$/Kg)']) / row['Preço Médio 2023 (US$/Kg)'] * 100) if row['Preço Médio 2023 (US$/Kg)'] > 0 else 0, axis=1
+            )
+            
+            total_imp_2024 = df_imp_pivot['VL_FOB_2024'].sum()
+            df_imp_pivot['Participacao (%)'] = (df_imp_pivot['VL_FOB_2024'] / total_imp_2024) * 100 if total_imp_2024 > 0 else 0
+
+            top_10_imp = df_imp_pivot.nlargest(10, 'VL_FOB_2024').reset_index(drop=True)
+            top_10_imp = top_10_imp.rename(columns={
+                'NO_PAIS': 'País',
+                'VL_FOB_2024': 'Valor FOB (US$)',
+                'KG_LIQUIDO_2024': 'Total Kg'
+            })
+            
+            top_10_imp_display = top_10_imp[['País', 'Valor FOB (US$)', 'Total Kg', 'Participacao (%)', 'Preço Médio 2023 (US$/Kg)', 'Preço Médio 2024 (US$/Kg)', 'Var. Preço 24/23 (%)']]
+            
+            st.dataframe(
+                top_10_imp_display.style.format({
+                    'Valor FOB (US$)': '{:,.2f}',
+                    'Total Kg': '{:,.0f}',
+                    'Participacao (%)': '{:.2f}%',
+                    'Preço Médio 2023 (US$/Kg)': '{:.2f}',
+                    'Preço Médio 2024 (US$/Kg)': '{:.2f}',
+                    'Var. Preço 24/23 (%)': '{:.2f}%',
+                }),
+                use_container_width=True
+            )
+        else:
+            st.info("Não há dados de importação para a seleção atual.")
+
+    # --- 6. Treemaps de Países (Visão Geral) ---
+    st.markdown("---")
+    st.header("TAREFA 2 - Análise de Países por Total Geral de Comércio")
+    col12, col13 = st.columns(2)
+
+    with col12:
+        st.subheader("Exportações (Total Geral)")
+        df_exp_geral = df_exp_filtered_sc.groupby('NO_PAIS').agg(
+            VL_FOB=('VL_FOB', 'sum'),
+            KG_LIQUIDO=('KG_LIQUIDO', 'sum')
+        ).reset_index()
+
+        fig_exp_geral = px.treemap(
+            df_exp_geral,
+            path=['NO_PAIS'],
+            values='VL_FOB',
+            title='Distribuição de Exportações por País (Todos os Produtos)',
+            color_discrete_sequence=px.colors.qualitative.D3,
+            hover_name='NO_PAIS',
+            hover_data={
+                'VL_FOB': ':,2f',
+                'KG_LIQUIDO': ':,0f'
+            }
+        )
+        st.plotly_chart(fig_exp_geral, use_container_width=True)
+
+    with col13:
+        st.subheader("Importações (Total Geral)")
+        df_imp_geral = df_imp_filtered_sc.groupby('NO_PAIS').agg(
+            VL_FOB=('VL_FOB', 'sum'),
+            KG_LIQUIDO=('KG_LIQUIDO', 'sum')
+        ).reset_index()
+
+        fig_imp_geral = px.treemap(
+            df_imp_geral,
+            path=['NO_PAIS'],
+            values='VL_FOB',
+            title='Distribuição de Importações por País (Todos os Produtos)',
+            color_discrete_sequence=px.colors.qualitative.D3,
+            hover_name='NO_PAIS',
+            hover_data={
+                'VL_FOB': ':,2f',
+                'KG_LIQUIDO': ':,0f'
+            }
+        )
+        st.plotly_chart(fig_imp_geral, use_container_width=True)
+
+# O `except` é executado se qualquer erro (de qualquer tipo) ocorrer no bloco `try`.
+except Exception as e:
+    st.error("Ocorreu um erro inesperado ao executar o aplicativo. Por favor, entre em contato com o administrador.")
+    st.write("---")
+    st.header("Detalhes Técnicos do Erro")
+    st.exception(e)  # Imprime o erro completo na tela do usuário para depuração
+    st.stop()
