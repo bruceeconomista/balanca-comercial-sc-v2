@@ -329,11 +329,16 @@ try:
                 df_pivot['Participacao (%)'] = (df_pivot[f'VL_FOB_{anos_ref_exp[-1]}'] / total_fob_ultimo_ano) * 100 if total_fob_ultimo_ano > 0 else 0
                 
                 top_10_exp = df_pivot.nlargest(10, f'VL_FOB_{anos_ref_exp[-1]}').reset_index(drop=True)
-                top_10_exp = top_10_exp.rename(columns={
-                    'NO_PAIS': 'País',
-                    f'VL_FOB_{anos_ref_exp[-1]}': 'Valor FOB (US$)',
-                    f'KG_LIQUIDO_{anos_ref_exp[-1]}': 'Total Kg'
-                })
+
+                # Ajuste para renomear colunas apenas se existirem
+                rename_map_exp = {}
+                if 'NO_PAIS' in top_10_exp.columns:
+                    rename_map_exp['NO_PAIS'] = 'País'
+                if f'VL_FOB_{anos_ref_exp[-1]}' in top_10_exp.columns:
+                    rename_map_exp[f'VL_FOB_{anos_ref_exp[-1]}'] = 'Valor FOB (US$)'
+                if f'KG_LIQUIDO_{anos_ref_exp[-1]}' in top_10_exp.columns:
+                    rename_map_exp[f'KG_LIQUIDO_{anos_ref_exp[-1]}'] = 'Total Kg'
+                top_10_exp = top_10_exp.rename(columns=rename_map_exp)
                 
                 columns_to_display_exp = ['País', 'Valor FOB (US$)', 'Total Kg', 'Participacao (%)']
                 if len(anos_ref_exp) == 2:
@@ -390,11 +395,16 @@ try:
                 df_imp_pivot['Participacao (%)'] = (df_imp_pivot[f'VL_FOB_{anos_ref_imp[-1]}'] / total_imp_ultimo_ano) * 100 if total_imp_ultimo_ano > 0 else 0
 
                 top_10_imp = df_imp_pivot.nlargest(10, f'VL_FOB_{anos_ref_imp[-1]}').reset_index(drop=True)
-                top_10_imp = top_10_imp.rename(columns={
-                    'NO_PAIS': 'País',
-                    f'VL_FOB_{anos_ref_imp[-1]}': 'Valor FOB (US$)',
-                    f'KG_LIQUIDO_{anos_ref_imp[-1]}': 'Total Kg'
-                })
+
+                # Ajuste para renomear colunas apenas se existirem
+                rename_map_imp = {}
+                if 'NO_PAIS' in top_10_imp.columns:
+                    rename_map_imp['NO_PAIS'] = 'País'
+                if f'VL_FOB_{anos_ref_imp[-1]}' in top_10_imp.columns:
+                    rename_map_imp[f'VL_FOB_{anos_ref_imp[-1]}'] = 'Valor FOB (US$)'
+                if f'KG_LIQUIDO_{anos_ref_imp[-1]}' in top_10_imp.columns:
+                    rename_map_imp[f'KG_LIQUIDO_{anos_ref_imp[-1]}'] = 'Total Kg'
+                top_10_imp = top_10_imp.rename(columns=rename_map_imp)
                 
                 columns_to_display_imp = ['País', 'Valor FOB (US$)', 'Total Kg', 'Participacao (%)']
                 if len(anos_ref_imp) == 2:
