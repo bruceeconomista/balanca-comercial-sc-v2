@@ -1,10 +1,13 @@
 import streamlit as st
 import pandas as pd
-import altair as alt
+import requests
+import io
 import plotly.express as px
-import os
+import altair as alt
+from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 try:
+    # Configura a página do Streamlit
     st.set_page_config(
         page_title="Análise de Balança Comercial",
         layout="wide"
@@ -12,45 +15,76 @@ try:
 
     st.title("Balança Comercial de Santa Catarina")
 
-    # Define o caminho dos arquivos
-    exp_file_path = "parquet_files/EXP_TOTAL.parquet"
-    imp_file_path = "parquet_files/IMP_TOTAL.parquet"
-    
-    st.write(f"Verificando a existência dos arquivos...")
-    
-    # Verifica se os arquivos existem no caminho esperado
-    if not os.path.exists(exp_file_path):
-        st.error(f"Erro: O arquivo '{exp_file_path}' não foi encontrado.")
-        st.stop()
-    if not os.path.exists(imp_file_path):
-        st.error(f"Erro: O arquivo '{imp_file_path}' não foi encontrado.")
-        st.stop()
+    # URLs para os arquivos Parquet no Hugging Face Hub.
+    # Por favor, substitua 'bruceeconomista' e 'balanca-comercial-sc-v2-dados'
+    # pelos seus dados de usuário e repositório reais.
+    EXP_URL = "https://huggingface.co/datasets/bruceeconomista/balanca-comercial-sc-v2-dados/resolve/main/EXP_TOTAL.parquet?download=true"
+    IMP_URL = "https://huggingface.co/datasets/bruceeconomista/balanca-comercial-sc-v2-dados/resolve/main/IMP_TOTAL.parquet?download=true"
+
+    def validate_columns(df, required_columns):
+        """
+        Verifica se as colunas necessárias estão presentes no DataFrame.
+        Retorna True se todas as colunas existirem, caso contrário retorna False e a lista de colunas faltantes.
+        """
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        return not missing_columns, missing_columns
 
     @st.cache_data
-    def load_data():
+    def load_data_from_huggingface():
         """
-        Carrega os dados dos arquivos Parquet usando o cache do Streamlit.
+        Baixa e carrega os dados dos arquivos Parquet a partir do Hugging Face Hub.
+        Usa o cache do Streamlit para evitar recarregar a cada interação.
         """
+        required_columns = ['CO_ANO', 'SG_UF', 'NO_PAIS', 'NO_NCM_POR', 'VL_FOB', 'KG_LIQUIDO']
+
         try:
-            st.write("Lendo os arquivos Parquet...")
-            df_exp = pd.read_parquet(exp_file_path)
-            df_imp = pd.read_parquet(imp_file_path)
-            
-            # Limpar os nomes das colunas
-            df_exp.columns = [col.replace('ï»¿', '') for col in df_exp.columns]
-            df_imp.columns = [col.replace('ï»¿', '') for col in df_imp.columns]
+            st.info("Baixando dados do Hugging Face Hub. Isso pode levar alguns minutos...")
+
+            # Baixar o arquivo de exportação
+            response_exp = requests.get(EXP_URL)
+            response_exp.raise_for_status() # Lança um erro para status de HTTP ruins
+            exp_bytes = io.BytesIO(response_exp.content)
+
+            # Baixar o arquivo de importação
+            response_imp = requests.get(IMP_URL)
+            response_imp.raise_for_status() # Lança um erro para status de HTTP ruins
+            imp_bytes = io.BytesIO(response_imp.content)
+
+            df_exp = pd.read_parquet(exp_bytes)
+            df_imp = pd.read_parquet(imp_bytes)
+
+            # Limpar os nomes das colunas de forma defensiva
+            df_exp.columns = [col.replace('ï»¿', '').strip() for col in df_exp.columns]
+            df_imp.columns = [col.replace('ï»¿', '').strip() for col in df_imp.columns]
+
+            # Validar as colunas
+            exp_valid, exp_missing = validate_columns(df_exp, required_columns)
+            imp_valid, imp_missing = validate_columns(df_imp, required_columns)
+
+            if not exp_valid:
+                st.error(f"Erro: As seguintes colunas estão faltando no arquivo de exportação: {exp_missing}")
+            if not imp_valid:
+                st.error(f"Erro: As seguintes colunas estão faltando no arquivo de importação: {imp_missing}")
+
+            if not exp_valid or not imp_valid:
+                return pd.DataFrame(), pd.DataFrame()
             
             return df_exp, df_imp
+        except requests.exceptions.HTTPError as e:
+            st.error(f"Erro HTTP ao baixar os arquivos. Verifique se as URLs estão corretas e se o repositório é público: {e}")
+            return pd.DataFrame(), pd.DataFrame()
         except Exception as e:
-            st.error(f"Erro ao ler os arquivos Parquet. Detalhes: {e}")
+            st.error(f"Erro inesperado ao carregar os dados: {e}")
             return pd.DataFrame(), pd.DataFrame()
 
+    # Inicia o carregamento dos dados
     with st.spinner("Carregando dados..."):
-        df_exp_total, df_imp_total = load_data()
+        df_exp_total, df_imp_total = load_data_from_huggingface()
 
+    # Verifica se os DataFrames foram carregados com sucesso
     if not df_exp_total.empty and not df_imp_total.empty:
         st.success("Dados carregados com sucesso!")
-        
+
         # --- Filtros
         st.sidebar.header("Filtros")
         years_exp = sorted(df_exp_total['CO_ANO'].unique()) if 'CO_ANO' in df_exp_total.columns else []
@@ -62,6 +96,7 @@ try:
         # --- Processamento e Visualização
         st.subheader(f"Análise de Balança Comercial em {selected_year_exp} e {selected_year_imp}")
 
+        # Filtra os dados de SC e ano selecionado
         df_exp_filtered_sc = df_exp_total[(df_exp_total['SG_UF'] == 'SC') & (df_exp_total['CO_ANO'] == selected_year_exp)]
         df_imp_filtered_sc = df_imp_total[(df_imp_total['SG_UF'] == 'SC') & (df_imp_total['CO_ANO'] == selected_year_imp)]
 
@@ -77,8 +112,8 @@ try:
             st.metric("Total Importações (SC)", f"US$ {total_imp_sc:,.2f}")
         with col3:
             st.metric("Balança Comercial (SC)", f"US$ {balanca_comercial:,.2f}")
-        
-        # --- Gráficos
+
+        # --- Gráficos de Análise
         col11, col12, col13 = st.columns(3)
 
         with col11:
@@ -150,8 +185,8 @@ try:
             else:
                 st.info("Não há dados de importação para a seleção atual.")
     else:
-        st.warning("Não foi possível carregar os dados. Verifique o seu repositório no GitHub para garantir que os arquivos estão presentes e que o Git LFS foi configurado corretamente.")
-        
+        st.warning("Aguardando dados... Certifique-se de que as URLs no código estão corretas e o seu repositório está acessível.")
+
 except Exception as e:
     st.error("Ocorreu um erro inesperado. Por favor, tente novamente mais tarde.")
     st.error(f"Detalhes do erro: {e}")
