@@ -10,7 +10,6 @@ try:
     )
 
     st.title("Balança Comercial de Santa Catarina")
-    print("Iniciando a aplicação...")
 
     @st.cache_data
     def load_data(exp_file, imp_file):
@@ -18,11 +17,11 @@ try:
         Carrega os dados dos arquivos Parquet enviados pelo usuário.
         Usa o cache do Streamlit para evitar recarregar a cada interação.
         """
+        # Verifica se os arquivos foram realmente enviados
         if exp_file is None or imp_file is None:
             return pd.DataFrame(), pd.DataFrame()
 
-        print(f"Tentando ler os arquivos: {exp_file} e {imp_file}")
-        
+        # Lê os arquivos diretamente dos objetos de upload
         df_exp = pd.read_parquet(exp_file)
         df_imp = pd.read_parquet(imp_file)
         
@@ -35,29 +34,25 @@ try:
     # --- Upload de Arquivos
     st.subheader("Carregar Arquivos")
     st.write("Faça o upload dos arquivos de Exportação e Importação para análise.")
-
-    # --- ATENÇÃO: Verifique se o nome dos arquivos abaixo é o mesmo que o nome exato no seu repositório GitHub,
-    # incluindo maiúsculas e minúsculas.
-    exp_file_name = "EXP_TOTAL.parquet"
-    imp_file_name = "IMP_TOTAL.parquet"
     
-    st.markdown(f"**Arquivos esperados:**\n- {exp_file_name}\n- {imp_file_name}")
+    # Adiciona os botões de upload de arquivo
+    uploaded_exp_file = st.file_uploader("Selecione o arquivo de Exportação (EXP_TOTAL.parquet)", type=['parquet'])
+    uploaded_imp_file = st.file_uploader("Selecione o arquivo de Importação (IMP_TOTAL.parquet)", type=['parquet'])
 
-    if st.button("Analisar Balança Comercial"):
-        if exp_file_name and imp_file_name:
-            with st.spinner("Carregando dados..."):
-                df_exp_total, df_imp_total = load_data(exp_file_name, imp_file_name)
-            
-            if not df_exp_total.empty and not df_imp_total.empty:
-                st.success("Dados carregados com sucesso!")
-                st.session_state['df_exp_total'] = df_exp_total
-                st.session_state['df_imp_total'] = df_imp_total
-                st.session_state['data_loaded'] = True
-            else:
-                st.error("Não foi possível carregar um ou ambos os arquivos. Verifique os nomes e a estrutura.")
+    if uploaded_exp_file and uploaded_imp_file:
+        with st.spinner("Carregando dados..."):
+            df_exp_total, df_imp_total = load_data(uploaded_exp_file, uploaded_imp_file)
+        
+        if not df_exp_total.empty and not df_imp_total.empty:
+            st.success("Dados carregados com sucesso!")
+            st.session_state['df_exp_total'] = df_exp_total
+            st.session_state['df_imp_total'] = df_imp_total
+            st.session_state['data_loaded'] = True
         else:
-            st.warning("Por favor, garanta que os arquivos 'EXP_TOTAL.parquet' e 'IMP_TOTAL.parquet' estejam no mesmo diretório que o app.")
-            
+            st.error("Não foi possível carregar um ou ambos os arquivos. Verifique os nomes e a estrutura.")
+    else:
+        st.info("Por favor, faça o upload dos arquivos para começar a análise.")
+
     if 'data_loaded' in st.session_state and st.session_state['data_loaded']:
         df_exp_total = st.session_state['df_exp_total']
         df_imp_total = st.session_state['df_imp_total']
