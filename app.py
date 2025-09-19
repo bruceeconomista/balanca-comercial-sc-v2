@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import altair as alt
 import plotly.express as px
+import requests
 
 st.set_page_config(
     page_title="Análise de Balança Comercial",
@@ -11,10 +12,9 @@ st.set_page_config(
 
 st.title("Balança Comercial de Santa Catarina")
 
-# Nomes dos arquivos
-EXP_FILE = "EXP_TOTAL.parquet"
-IMP_FILE = "IMP_TOTAL.parquet"
-PARQUET_FOLDER = "parquet_files"
+# URLs dos arquivos brutos no GitHub
+EXP_URL = "https://raw.githubusercontent.com/bruceeconomista/balanca-comercial-sc-v2/main/parquet_files/EXP_TOTAL.parquet"
+IMP_URL = "https://raw.githubusercontent.com/bruceeconomista/balanca-comercial-sc-v2/main/parquet_files/IMP_TOTAL.parquet"
 
 def normalize_column_names(df):
     """
@@ -24,35 +24,39 @@ def normalize_column_names(df):
     return df
 
 @st.cache_data
-def load_data():
-    """Carrega os dados dos arquivos Parquet."""
+def load_data_from_url():
+    """Baixa e carrega os dados dos arquivos Parquet a partir de URLs."""
     try:
-        exp_path = os.path.join(PARQUET_FOLDER, EXP_FILE)
-        imp_path = os.path.join(PARQUET_FOLDER, IMP_FILE)
+        st.write("Baixando dados de exportação...")
+        response_exp = requests.get(EXP_URL)
+        response_exp.raise_for_status() # Lança um erro se a requisição falhar
+        df_exp = pd.read_parquet(response_exp.content)
 
-        df_exp = pd.read_parquet(exp_path)
-        df_imp = pd.read_parquet(imp_path)
+        st.write("Baixando dados de importação...")
+        response_imp = requests.get(IMP_URL)
+        response_imp.raise_for_status()
+        df_imp = pd.read_parquet(response_imp.content)
         
-        # Normaliza os nomes das colunas imediatamente após o carregamento
+        # Normaliza os nomes das colunas e corrige a codificação
         df_exp = normalize_column_names(df_exp)
         df_imp = normalize_column_names(df_imp)
-        
-        # Limpar os nomes das colunas e corrigir a codificação
+
         for df in [df_exp, df_imp]:
             if 'NO_NCM_POR' in df.columns:
-                df['NO_NCM_POR'] = df['NO_NCM_POR'].str.encode('latin1').str.decode('utf8', 'ignore')
+                df['NO_NCM_POR'] = df['NO_NCM_POR'].astype(str).str.encode('latin1').str.decode('utf8', 'ignore')
             if 'NO_PAIS' in df.columns:
-                df['NO_PAIS'] = df['NO_PAIS'].str.encode('latin1').str.decode('utf8', 'ignore')
+                df['NO_PAIS'] = df['NO_PAIS'].astype(str).str.encode('latin1').str.decode('utf8', 'ignore')
         
         return df_exp, df_imp
-    except FileNotFoundError:
-        st.error("Erro: Os arquivos .parquet não foram encontrados. Certifique-se de que estão na pasta 'parquet_files'.")
+    except requests.exceptions.RequestException as e:
+        st.error(f"Erro ao baixar os arquivos do GitHub: {e}. Certifique-se de que o repositório é público e que os links estão corretos.")
         st.stop()
     except Exception as e:
         st.error(f"Erro ao carregar os dados: {e}")
         st.stop()
 
-df_exp_total, df_imp_total = load_data()
+# Chama a função que baixa os dados
+df_exp_total, df_imp_total = load_data_from_url()
 
 # --- 1. Filtros na Primeira Linha ---
 col1, col2 = st.columns(2)
@@ -434,7 +438,7 @@ with col10:
                 'Participacao (%)': '{:.2f}%',
                 f'Preço Médio {selected_year-1} (US$/Kg)': '{:.2f}',
                 f'Preço Médio {selected_year} (US$/Kg)': '{:.2f}',
-                f'Var. Preço {selected_year}/{selected_year-1} (%)': '{:.2f}%',
+                f'Variação Preço {selected_year}/{selected_year-1} (%)': '{:.2f}%',
             }),
             use_container_width=True,
             hide_index=True
@@ -490,7 +494,7 @@ with col11:
                 'Participacao (%)': '{:.2f}%',
                 f'Preço Médio {selected_year-1} (US$/Kg)': '{:.2f}',
                 f'Preço Médio {selected_year} (US$/Kg)': '{:.2f}',
-                f'Var. Preço {selected_year}/{selected_year-1} (%)': '{:.2f}%',
+                f'Variação Preço {selected_year}/{selected_year-1} (%)': '{:.2f}%',
             }),
             use_container_width=True,
             hide_index=True
