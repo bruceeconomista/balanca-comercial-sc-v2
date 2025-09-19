@@ -29,11 +29,12 @@ def load_data():
         df_exp.columns = [col.replace('ï»¿', '') for col in df_exp.columns]
         df_imp.columns = [col.replace('ï»¿', '') for col in df_imp.columns]
         
-        # Correção da codificação de caracteres
-        df_exp['NO_NCM_POR'] = [item.encode('latin1').decode('utf8') for item in df_exp['NO_NCM_POR']]
-        df_imp['NO_NCM_POR'] = [item.encode('latin1').decode('utf8') for item in df_imp['NO_NCM_POR']]
-        df_exp['NO_PAIS'] = [item.encode('latin1').decode('utf8') for item in df_exp['NO_PAIS']]
-        df_imp['NO_PAIS'] = [item.encode('latin1').decode('utf8') for item in df_imp['NO_PAIS']]
+        # --- CORREÇÃO DE CODIFICAÇÃO ---
+        # A codificação dos caracteres especiais deve ser corrigida em todas as colunas de texto
+        df_exp['NO_NCM_POR'] = df_exp['NO_NCM_POR'].str.encode('latin1').str.decode('utf8')
+        df_imp['NO_NCM_POR'] = df_imp['NO_NCM_POR'].str.encode('latin1').str.decode('utf8')
+        df_exp['NO_PAIS'] = df_exp['NO_PAIS'].str.encode('latin1').str.decode('utf8')
+        df_imp['NO_PAIS'] = df_imp['NO_PAIS'].str.encode('latin1').str.decode('utf8')
 
         return df_exp, df_imp
     except FileNotFoundError:
@@ -128,11 +129,12 @@ with col6:
 
     chart_exp = alt.Chart(df_chart_exp).mark_bar().encode(
         x=alt.X('CO_NCM:N', title='Código NCM', sort='-y'),
-        y=alt.Y('VL_FOB', title='Valor FOB (US$)'),
+        # --- CORREÇÃO DE FORMATAÇÃO DO EIXO Y ---
+        y=alt.Y('VL_FOB', title='Valor FOB (US$)', axis=alt.Axis(format='~s')),
         tooltip=[
             alt.Tooltip('NO_NCM_POR', title='Nome do Produto'),
             alt.Tooltip('KG_LIQUIDO', title='Total de Kg', format=',.0f'),
-            alt.Tooltip('VL_FOB_FORMATADO', title='Valor FOB (US$)')
+            alt.Tooltip('VL_FOB', title='Valor FOB (US$)', format=',.2f') # Removida a formatação em string para evitar erro
         ]
     ).properties(
         title=f'{num_products_exp} Produtos Mais Exportados'
@@ -157,11 +159,12 @@ with col7:
     
     chart_imp = alt.Chart(df_chart_imp).mark_bar(color='#E57F84').encode(
         x=alt.X('CO_NCM:N', title='Código NCM', sort='-y'),
-        y=alt.Y('VL_FOB', title='Valor FOB (US$)'),
+        # --- CORREÇÃO DE FORMATAÇÃO DO EIXO Y ---
+        y=alt.Y('VL_FOB', title='Valor FOB (US$)', axis=alt.Axis(format='~s')),
         tooltip=[
             alt.Tooltip('NO_NCM_POR', title='Nome do Produto'),
             alt.Tooltip('KG_LIQUIDO', title='Total de Kg', format=',.0f'),
-            alt.Tooltip('VL_FOB_FORMATADO', title='Valor FOB (US$)')
+            alt.Tooltip('VL_FOB', title='Valor FOB (US$)', format=',.2f') # Removida a formatação em string para evitar erro
         ]
     ).properties(
         title=f'{num_products_imp} Produtos Mais Importados'
@@ -248,7 +251,7 @@ col10, col11 = st.columns(2)
 
 # Código para a tabela de exportação
 with col10:
-    st.subheader("20 Maiores Destinos de Exportação / Variações Interanuais")
+    st.subheader("10 Maiores Destinos de Exportação / Variações Interanuais")
     if not df_exp_filtered_sc.empty:
         df_exp_agg = df_exp[(df_exp['CO_ANO'].isin([2023, 2024])) & (df_exp['SG_UF_NCM'].isin(selected_ufs))]
         df_exp_agg = df_exp_agg.groupby(['CO_ANO', 'NO_PAIS']).agg(
@@ -274,7 +277,7 @@ with col10:
         total_fob_2024 = df_pivot['VL_FOB_2024'].sum()
         df_pivot['Participacao (%)'] = (df_pivot['VL_FOB_2024'] / total_fob_2024) * 100 if total_fob_2024 > 0 else 0
         
-        top_10_exp = df_pivot.nlargest(20, 'VL_FOB_2024').reset_index(drop=True)
+        top_10_exp = df_pivot.nlargest(10, 'VL_FOB_2024').reset_index(drop=True)
         top_10_exp = top_10_exp.rename(columns={
             'NO_PAIS': 'País',
             'VL_FOB_2024': 'Valor FOB (US$)',
@@ -300,7 +303,7 @@ with col10:
 
 # Código para a tabela de importação
 with col11:
-    st.subheader("20 Maiores Destinos de Importação / Variações Interanuais")
+    st.subheader("10 Maiores Destinos de Importação / Variações Interanuais")
     if not df_imp_filtered_sc.empty:
         df_imp_agg = df_imp[(df_imp['CO_ANO'].isin([2023, 2024])) & (df_imp['SG_UF_NCM'].isin(selected_ufs))]
         df_imp_agg = df_imp_agg.groupby(['CO_ANO', 'NO_PAIS']).agg(
@@ -325,7 +328,7 @@ with col11:
         total_imp_2024 = df_imp_pivot['VL_FOB_2024'].sum()
         df_imp_pivot['Participacao (%)'] = (df_imp_pivot['VL_FOB_2024'] / total_imp_2024) * 100 if total_imp_2024 > 0 else 0
 
-        top_10_imp = df_imp_pivot.nlargest(20, 'VL_FOB_2024').reset_index(drop=True)
+        top_10_imp = df_imp_pivot.nlargest(10, 'VL_FOB_2024').reset_index(drop=True)
         top_10_imp = top_10_imp.rename(columns={
             'NO_PAIS': 'País',
             'VL_FOB_2024': 'Valor FOB (US$)',
@@ -355,7 +358,6 @@ col12, col13 = st.columns(2)
 
 with col12:
     st.subheader("Exportações (Total Geral)")
-    # Este treemap é baseado nos dados totais, sem filtro de produto
     df_exp_geral = df_exp_filtered_sc.groupby('NO_PAIS').agg(
         VL_FOB=('VL_FOB', 'sum'),
         KG_LIQUIDO=('KG_LIQUIDO', 'sum')
@@ -377,7 +379,6 @@ with col12:
 
 with col13:
     st.subheader("Importações (Total Geral)")
-    # Este treemap é baseado nos dados totais, sem filtro de produto
     df_imp_geral = df_imp_filtered_sc.groupby('NO_PAIS').agg(
         VL_FOB=('VL_FOB', 'sum'),
         KG_LIQUIDO=('KG_LIQUIDO', 'sum')
