@@ -25,14 +25,17 @@ def carregar_dados():
         
         # A seguir, uma limpeza de dados para garantir que as colunas numéricas estejam corretas
         try:
-            # Usamos pd.to_numeric para converter as colunas e coercer erros para NaN
-            df['CO_ANO'] = pd.to_numeric(df['CO_ANO'].astype(str).str.strip(), errors='coerce').astype('Int64')
-            df['CO_MES'] = pd.to_numeric(df['CO_MES'].astype(str).str.strip(), errors='coerce').astype('Int64')
-            df['KG_LIQUIDO'] = pd.to_numeric(df['KG_LIQUIDO'].astype(str).str.strip(), errors='coerce').astype(float)
-            df['VL_FOB'] = pd.to_numeric(df['VL_FOB'].astype(str).str.strip(), errors='coerce').astype(float)
+            # Força a conversão para string, remove espaços e depois converte para numérico
+            df['CO_ANO'] = pd.to_numeric(df['CO_ANO'].astype(str).str.strip(), errors='coerce')
+            df['CO_MES'] = pd.to_numeric(df['CO_MES'].astype(str).str.strip(), errors='coerce')
+            df['KG_LIQUIDO'] = pd.to_numeric(df['KG_LIQUIDO'].astype(str).str.strip(), errors='coerce')
+            df['VL_FOB'] = pd.to_numeric(df['VL_FOB'].astype(str).str.strip(), errors='coerce')
             
             # Remove linhas com valores NaN após a conversão para evitar erros nos gráficos
             df.dropna(subset=['CO_ANO', 'CO_MES', 'KG_LIQUIDO', 'VL_FOB'], inplace=True)
+            
+            # Converte a coluna de ano para o tipo de dado de inteiro apropriado para o slider
+            df['CO_ANO'] = df['CO_ANO'].astype('Int64')
             
             return df
         except KeyError as e:
