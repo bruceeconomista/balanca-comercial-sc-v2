@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 import plotly.express as px
-from datasets import load_dataset
 
 try:
     st.set_page_config(
@@ -17,27 +16,27 @@ try:
     @st.cache_data(show_spinner=False)
     def load_data():
         """
-        Carrega os dados dos datasets públicos do Hugging Face.
+        Carrega os dados dos arquivos Parquet a partir das URLs.
         Usa o cache do Streamlit para evitar recarregar a cada interação.
         """
         try:
             with st.spinner('Carregando dados, isso pode levar alguns segundos...'):
-                exp_dataset = load_dataset("bruceeconomista/balanca_comercial_exp_sc", split="train")
-                imp_dataset = load_dataset("bruceeconomista/balanca_comercial_imp_sc", split="train")
-
-                df_exp = exp_dataset.to_pandas()
-                df_imp = imp_dataset.to_pandas()
+                exp_url = "https://huggingface.co/datasets/bruceeconomista/balanca-comercial-sc-v2-dados/resolve/main/EXP_TOTAL.parquet"
+                imp_url = "https://huggingface.co/datasets/bruceeconomista/balanca-comercial-sc-v2-dados/resolve/main/IMP_TOTAL.parquet"
+                
+                df_exp = pd.read_parquet(exp_url)
+                df_imp = pd.read_parquet(imp_url)
             
             return df_exp, df_imp
         except Exception as e:
-            st.error(f"Erro ao carregar os dados. Verifique a conexão ou os datasets: {e}")
+            st.error(f"Erro ao carregar os dados. Verifique a conexão ou os links dos arquivos: {e}")
             st.stop()
             return pd.DataFrame(), pd.DataFrame()
 
     df_exp, df_imp = load_data()
 
     if df_exp.empty or df_imp.empty:
-        st.warning("Não foi possível carregar os dados. Por favor, tente novamente mais tarde.")
+        st.warning("Não foi possível carregar os dados. Por favor, verifique se as URLs dos arquivos estão corretas.")
         st.stop()
 
     df_exp['tipo'] = 'Exportação'
