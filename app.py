@@ -15,38 +15,54 @@ st.title("Balança Comercial de Santa Catarina")
 DATA_FOLDER = "pre_processed_data"
 
 def load_data(selected_year):
-    """Carrega os dados dos arquivos Parquet filtrados por ano e UF."""
+    """Carrega os dados dos arquivos Parquet para o ano selecionado e o ano anterior."""
     try:
-        exp_path = os.path.join(DATA_FOLDER, f"exp_products_{selected_year}.parquet")
-        imp_path = os.path.join(DATA_FOLDER, f"imp_products_{selected_year}.parquet")
+        years_to_load = [selected_year]
+        if selected_year > 2000:  # Assumindo que dados são a partir de 2000
+            years_to_load.append(selected_year - 1)
 
-        df_exp = pd.read_parquet(exp_path)
-        df_imp = pd.read_parquet(imp_path)
+        exp_dfs = []
+        imp_dfs = []
         
-        # --- Trecho de depuração ---
-        # Remova este trecho após o problema ser resolvido
-        st.write("Colunas encontradas em df_exp:", df_exp.columns.tolist())
-        st.write("Colunas encontradas em df_imp:", df_imp.columns.tolist())
-        # --- Fim do trecho de depuração ---
+        for year in years_to_load:
+            exp_path = os.path.join(DATA_FOLDER, f"exp_products_{year}.parquet")
+            imp_path = os.path.join(DATA_FOLDER, f"imp_products_{year}.parquet")
 
+            if os.path.exists(exp_path):
+                df_exp_temp = pd.read_parquet(exp_path)
+                df_exp_temp['CO_ANO'] = year
+                exp_dfs.append(df_exp_temp)
+            else:
+                st.warning(f"Aviso: Arquivo de exportação para o ano {year} não encontrado.")
+
+            if os.path.exists(imp_path):
+                df_imp_temp = pd.read_parquet(imp_path)
+                df_imp_temp['CO_ANO'] = year
+                imp_dfs.append(df_imp_temp)
+            else:
+                st.warning(f"Aviso: Arquivo de importação para o ano {year} não encontrado.")
+
+        df_exp = pd.concat(exp_dfs, ignore_index=True) if exp_dfs else pd.DataFrame()
+        df_imp = pd.concat(imp_dfs, ignore_index=True) if imp_dfs else pd.DataFrame()
+        
         # Mapeamento dos nomes de colunas esperados
-        # Corrija este dicionário com base nos nomes que você encontrar nos logs
+        # Este mapeamento está correto com base nos seus logs
         column_mapping = {
             'CO_NCM': 'CO_NCM',
             'NO_NCM_POR': 'NO_NCM_POR',
-            'CO_ANO': 'CO_ANO',
             'VL_FOB': 'VL_FOB',
             'KG_LIQUIDO': 'KG_LIQUIDO',
             'NO_PAIS': 'NO_PAIS'
         }
 
-        # Renomear colunas para garantir que o resto do script funcione
-        df_exp.rename(columns=column_mapping, inplace=True)
-        df_imp.rename(columns=column_mapping, inplace=True)
+        if not df_exp.empty:
+            df_exp.rename(columns=column_mapping, inplace=True)
+        if not df_imp.empty:
+            df_imp.rename(columns=column_mapping, inplace=True)
         
         return df_exp, df_imp
-    except FileNotFoundError:
-        st.error(f"Erro: Os arquivos .parquet para o ano {selected_year} não foram encontrados na pasta 'pre_processed_data'.")
+    except Exception as e:
+        st.error(f"Ocorreu um erro ao carregar os dados: {e}")
         return pd.DataFrame(), pd.DataFrame()
 
 # --- 1. Filtros na Primeira Linha ---
@@ -71,8 +87,8 @@ st.markdown("---")
 col3, col4, col5 = st.columns(3)
 
 if not df_exp.empty and not df_imp.empty:
-    total_exp = df_exp['VL_FOB'].sum()
-    total_imp = df_imp['VL_FOB'].sum()
+    total_exp = df_exp[df_exp['CO_ANO'] == selected_year]['VL_FOB'].sum()
+    total_imp = df_imp[df_imp['CO_ANO'] == selected_year]['VL_FOB'].sum()
     balanca_comercial = total_exp - total_imp
 
     def format_brl(value, decimals=2):
@@ -123,7 +139,7 @@ if not df_exp.empty:
             "Número de produtos a exibir", min_value=0, max_value=20, value=5, key='slider_exp'
         )
         
-        df_chart_exp = df_exp.groupby(['CO_NCM', 'NO_NCM_POR']).agg(
+        df_chart_exp = df_exp[df_exp['CO_ANO'] == selected_year].groupby(['CO_NCM', 'NO_NCM_POR']).agg(
             VL_FOB=('VL_FOB', 'sum'),
             KG_LIQUIDO=('KG_LIQUIDO', 'sum')
         ).nlargest(num_products_exp, 'VL_FOB').reset_index()
@@ -211,7 +227,7 @@ if not df_imp.empty:
             "Número de produtos a exibir", min_value=0, max_value=20, value=5, key='slider_imp'
         )
 
-        df_chart_imp = df_imp.groupby(['CO_NCM', 'NO_NCM_POR']).agg(
+        df_chart_imp = df_imp[df_imp['CO_ANO'] == selected_year].groupby(['CO_NCM', 'NO_NCM_POR']).agg(
             VL_FOB=('VL_FOB', 'sum'),
             KG_LIQUIDO=('KG_LIQUIDO', 'sum')
         ).nlargest(num_products_imp, 'VL_FOB').reset_index()
@@ -487,7 +503,7 @@ col12, col13 = st.columns(2)
 if not df_exp.empty:
     with col12:
         st.subheader(f"Exportações (Total Geral) ({selected_year})")
-        df_exp_geral = df_exp.groupby('NO_PAIS').agg(
+        df_exp_geral = df_exp[df_exp['CO_ANO'] == selected_year].groupby('NO_PAIS').agg(
             VL_FOB=('VL_FOB', 'sum'),
             KG_LIQUIDO=('KG_LIQUIDO', 'sum')
         ).reset_index()
@@ -512,7 +528,7 @@ else:
 if not df_imp.empty:
     with col13:
         st.subheader(f"Importações (Total Geral) ({selected_year})")
-        df_imp_geral = df_imp.groupby('NO_PAIS').agg(
+        df_imp_geral = df_imp[df_imp['CO_ANO'] == selected_year].groupby('NO_PAIS').agg(
             VL_FOB=('VL_FOB', 'sum'),
             KG_LIQUIDO=('KG_LIQUIDO', 'sum')
         ).reset_index()
