@@ -35,8 +35,8 @@ try:
             df_imp = pd.read_parquet(imp_file)
             
             # Limpar os nomes das colunas de forma defensiva
-            df_exp.columns = [col.replace('ï»¿', '') for col in df_exp.columns]
-            df_imp.columns = [col.replace('ï»¿', '') for col in df_imp.columns]
+            df_exp.columns = [col.replace('ï»¿', '').strip() for col in df_exp.columns]
+            df_imp.columns = [col.replace('ï»¿', '').strip() for col in df_imp.columns]
 
             required_cols = ['CO_ANO', 'SG_UF_NCM', 'NO_NCM_POR', 'VL_FOB', 'KG_LIQUIDO', 'NO_PAIS']
             
@@ -49,7 +49,9 @@ try:
                     error_msg += f"- Exportações: Colunas faltantes: {', '.join(exp_missing)}\n"
                 if not imp_ok:
                     error_msg += f"- Importações: Colunas faltantes: {', '.join(imp_missing)}\n"
-                raise ValueError(error_msg)
+                st.error(error_msg)
+                st.info("Por favor, verifique se os arquivos `.parquet` contêm todas as colunas necessárias.")
+                st.stop()
 
             return df_exp, df_imp
         
