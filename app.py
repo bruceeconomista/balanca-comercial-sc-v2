@@ -26,30 +26,34 @@ def load_data():
         df_exp = pd.read_parquet(exp_path)
         df_imp = pd.read_parquet(imp_path)
         
-        # Limpar os nomes das colunas e corrigir a codificação
+        # Limpar os nomes das colunas
         df_exp.columns = [col.replace('ï»¿', '') for col in df_exp.columns]
         df_imp.columns = [col.replace('ï»¿', '') for col in df_imp.columns]
         
         # Correção da codificação de caracteres
-        # Assegura que todas as colunas de string são tratadas
-        df_exp['NO_NCM_POR'] = df_exp['NO_NCM_POR'].apply(lambda x: x.encode('latin1').decode('utf8'))
-        df_imp['NO_NCM_POR'] = df_imp['NO_NCM_POR'].apply(lambda x: x.encode('latin1').decode('utf8'))
-        df_exp['NO_PAIS'] = df_exp['NO_PAIS'].apply(lambda x: x.encode('latin1').decode('utf8'))
-        df_imp['NO_PAIS'] = df_imp['NO_PAIS'].apply(lambda x: x.encode('latin1').decode('utf8'))
+        # Usa um loop para garantir que funciona com grandes dataframes
+        for df in [df_exp, df_imp]:
+            if 'NO_NCM_POR' in df.columns:
+                df['NO_NCM_POR'] = df['NO_NCM_POR'].apply(lambda x: x.encode('latin1').decode('utf8', 'ignore'))
+            if 'NO_PAIS' in df.columns:
+                df['NO_PAIS'] = df['NO_PAIS'].apply(lambda x: x.encode('latin1').decode('utf8', 'ignore'))
 
         return df_exp, df_imp
     except FileNotFoundError:
-        st.error("Erro: Os arquivos .parquet não foram encontrados. Certifique-se de que estão na pasta 'parquet_files'.")
         return pd.DataFrame(), pd.DataFrame()
 
 df_exp_total, df_imp_total = load_data()
 
+# Verifica se os dataframes foram carregados com sucesso
+if df_exp_total.empty or df_imp_total.empty:
+    st.error("Erro: Os arquivos .parquet não foram encontrados. Certifique-se de que estão na pasta 'parquet_files'.")
+    st.stop() # Interrompe a execução do script
 
 # --- 1. Filtros na Primeira Linha ---
 col1, col2 = st.columns(2)
 
 with col1:
-    all_ufs = df_exp_total['SG_UF_NCM'].unique().tolist() if 'SG_UF_NCM' in df_exp_total.columns else []
+    all_ufs = sorted(df_exp_total['SG_UF_NCM'].unique().tolist()) if 'SG_UF_NCM' in df_exp_total.columns else []
     default_ufs = ['SC'] if 'SC' in all_ufs else all_ufs
     selected_ufs = st.multiselect(
         "Selecione os Estados (UF)",
@@ -62,28 +66,23 @@ with col2:
     selected_year = st.selectbox(
         "Selecione o Ano",
         options=all_years,
-        index=0 if all_years else None # Define 2024 como padrão se disponível
+        index=0 if all_years else None
     )
-
 
 # --- 2. Cards de resumo ---
 st.markdown("---")
 col3, col4, col5 = st.columns(3)
 
 # Cria os dataframes filtrados para os cards, gráficos e tabelas principais
-if not df_exp_total.empty and not df_imp_total.empty:
-    df_exp_filtered = df_exp_total[
-        (df_exp_total['CO_ANO'] == selected_year) &
-        (df_exp_total['SG_UF_NCM'].isin(selected_ufs))
-    ]
+df_exp_filtered = df_exp_total[
+    (df_exp_total['CO_ANO'] == selected_year) &
+    (df_exp_total['SG_UF_NCM'].isin(selected_ufs))
+]
 
-    df_imp_filtered = df_imp_total[
-        (df_imp_total['CO_ANO'] == selected_year) &
-        (df_imp_total['SG_UF_NCM'].isin(selected_ufs))
-    ]
-else:
-    df_exp_filtered = pd.DataFrame()
-    df_imp_filtered = pd.DataFrame()
+df_imp_filtered = df_imp_total[
+    (df_imp_total['CO_ANO'] == selected_year) &
+    (df_imp_total['SG_UF_NCM'].isin(selected_ufs))
+]
 
 # Cálculo dos totais
 total_exp = df_exp_filtered['VL_FOB'].sum()
@@ -430,7 +429,7 @@ with col10:
                 'Participacao (%)': '{:.2f}%',
                 f'Preço Médio {selected_year-1} (US$/Kg)': '{:.2f}',
                 f'Preço Médio {selected_year} (US$/Kg)': '{:.2f}',
-                f'Var. Preço {selected_year}/{selected_year-1} (%)': '{:.2f}%',
+                f'Variação Preço {selected_year}/{selected_year-1} (%)': '{:.2f}%',
             }),
             use_container_width=True,
             hide_index=True
@@ -481,11 +480,11 @@ with col11:
         
         st.dataframe(
             top_10_imp_display.style.format({
-                'Valor FOB (US$)': lambda x: format_brl(x, 2),
-                'Total Kg': lambda x: format_brl(x, 0),
+                'Valor FOB': lambda x: format_brl(x, 2),
+                'Total KG': lambda x: format_brl(x, 0),
                 'Participacao (%)': '{:.2f}%',
-                f'Preço Médio {selected_year-1} (US$/Kg)': '{:.2f}',
-                f'Preço Médio {selected_year} (US$/Kg)': '{:.2f}',
+                f'Preço médio {selected_year-1} (US$/Kg)': '{:.2f}',
+                f'Preço médio {selected_year} (US$/Kg)': '{:.2f}',
                 f'Variação Preço {selected_year}/{selected_year-1} (%)': '{:.2f}%',
             }),
             use_container_width=True,
