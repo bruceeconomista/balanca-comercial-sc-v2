@@ -4,7 +4,7 @@ import os
 import altair as alt
 import plotly.express as px
 
-# O Streamlit é um framework para criar aplicativos da web com Python.
+# Streamlit é um framework para criar aplicativos da web com Python.
 # O `try` inicia um bloco onde tentamos executar o código. Se um erro ocorrer,
 # a execução salta para o bloco `except`.
 try:
@@ -15,13 +15,21 @@ try:
 
     st.title("Balança Comercial de Santa Catarina")
 
-    # Nomes dos arquivos
+    # Nomes dos arquivos e pastas.
     EXP_FILE = "EXP_TOTAL.parquet"
     IMP_FILE = "IMP_TOTAL.parquet"
     PARQUET_FOLDER = "parquet_files"
 
+    # Função para carregar os dados.
+    # O uso do cache evita que os dados sejam recarregados toda vez que a página é atualizada.
+    @st.cache_data
     def load_data():
-        """Carrega os dados dos arquivos Parquet."""
+        """
+        Carrega os dados dos arquivos Parquet.
+        
+        Retorna:
+            tuple: Uma tupla contendo os DataFrames de exportação e importação.
+        """
         try:
             exp_path = os.path.join(PARQUET_FOLDER, EXP_FILE)
             imp_path = os.path.join(PARQUET_FOLDER, IMP_FILE)
@@ -35,7 +43,8 @@ try:
             df_exp = pd.read_parquet(exp_path)
             df_imp = pd.read_parquet(imp_path)
             
-            # Limpar os nomes das colunas e corrigir a codificação
+            # Limpar os nomes das colunas e corrigir a codificação.
+            # Essa etapa é importante pois os arquivos .csv podem ter problemas de codificação.
             df_exp.columns = [col.replace('ï»¿', '') for col in df_exp.columns]
             df_imp.columns = [col.replace('ï»¿', '') for col in df_imp.columns]
             
@@ -143,7 +152,7 @@ try:
             tooltip=[
                 alt.Tooltip('NO_NCM_POR', title='Nome do Produto'),
                 alt.Tooltip('KG_LIQUIDO', title='Total de Kg', format=',.0f'),
-                alt.Tooltip('VL_FOB', title='Valor FOB (US$)', format=',.2f') # Removida a formatação em string para evitar erro
+                alt.Tooltip('VL_FOB', title='Valor FOB (US$)', format=',.2f')
             ]
         ).properties(
             title=f'{num_products_exp} Produtos Mais Exportados'
@@ -173,7 +182,7 @@ try:
             tooltip=[
                 alt.Tooltip('NO_NCM_POR', title='Nome do Produto'),
                 alt.Tooltip('KG_LIQUIDO', title='Total de Kg', format=',.0f'),
-                alt.Tooltip('VL_FOB', title='Valor FOB (US$)', format=',.2f') # Removida a formatação em string para evitar erro
+                alt.Tooltip('VL_FOB', title='Valor FOB (US$)', format=',.2f')
             ]
         ).properties(
             title=f'{num_products_imp} Produtos Mais Importados'
