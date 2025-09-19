@@ -23,13 +23,21 @@ def load_data(selected_year):
         df_exp = pd.read_parquet(exp_path)
         df_imp = pd.read_parquet(imp_path)
         
+        # --- Trecho de depuração ---
+        # Remova este trecho após o problema ser resolvido
+        st.write("Colunas encontradas em df_exp:", df_exp.columns.tolist())
+        st.write("Colunas encontradas em df_imp:", df_imp.columns.tolist())
+        # --- Fim do trecho de depuração ---
+
         # Mapeamento dos nomes de colunas esperados
+        # Corrija este dicionário com base nos nomes que você encontrar nos logs
         column_mapping = {
             'CO_NCM': 'CO_NCM',
             'NO_NCM_POR': 'NO_NCM_POR',
             'CO_ANO': 'CO_ANO',
             'VL_FOB': 'VL_FOB',
-            'KG_LIQUIDO': 'KG_LIQUIDO'
+            'KG_LIQUIDO': 'KG_LIQUIDO',
+            'NO_PAIS': 'NO_PAIS'
         }
 
         # Renomear colunas para garantir que o resto do script funcione
@@ -409,7 +417,7 @@ if not df_exp.empty:
                 'Participacao (%)': '{:.2f}%',
                 f'Preço Médio {selected_year-1} (US$/Kg)': '{:.2f}',
                 f'Preço Médio {selected_year} (US$/Kg)': '{:.2f}',
-                f'Var. Preço {selected_year}/{selected_year-1} (%)': '{:.2f}%',
+                f'Variação Preço {selected_year}/{selected_year-1} (%)': '{:.2f}%',
             }),
             use_container_width=True,
             hide_index=True
