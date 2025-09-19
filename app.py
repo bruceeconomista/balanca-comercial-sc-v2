@@ -17,7 +17,7 @@ st.markdown("Análise dos dados de importação e exportação do estado de Sant
 
 # Tentar carregar os dados
 try:
-    df_geral = pd.read_csv("https://raw.githubusercontent.com/bruceeconomista/balanca-comercial-sc-v2/main/balanca_comercial_sc.csv", sep=';')
+    df_geral = pd.read_csv("https://github.com/bruceeconomista/balanca-comercial-sc-v2.git", sep=';')
     st.write("Dados carregados com sucesso!")
 except Exception as e:
     st.error(f"Erro ao carregar os dados: {e}")
