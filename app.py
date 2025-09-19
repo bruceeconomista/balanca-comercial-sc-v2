@@ -31,38 +31,38 @@ def load_data():
         df_imp.columns = [col.replace('ï»¿', '') for col in df_imp.columns]
         
         # Correção da codificação de caracteres
-        # Usa um loop para garantir que funciona com grandes dataframes
         for df in [df_exp, df_imp]:
             if 'NO_NCM_POR' in df.columns:
-                df['NO_NCM_POR'] = df['NO_NCM_POR'].apply(lambda x: x.encode('latin1').decode('utf8', 'ignore'))
+                df['NO_NCM_POR'] = df['NO_NCM_POR'].str.encode('latin1').str.decode('utf8', 'ignore')
             if 'NO_PAIS' in df.columns:
-                df['NO_PAIS'] = df['NO_PAIS'].apply(lambda x: x.encode('latin1').decode('utf8', 'ignore'))
-
+                df['NO_PAIS'] = df['NO_PAIS'].str.encode('latin1').str.decode('utf8', 'ignore')
+        
         return df_exp, df_imp
     except FileNotFoundError:
-        return pd.DataFrame(), pd.DataFrame()
+        st.error("Erro: Os arquivos .parquet não foram encontrados. Certifique-se de que estão na pasta 'parquet_files'.")
+        st.stop() # Interrompe a execução do script para evitar o KeyError
+    except Exception as e:
+        st.error(f"Erro ao carregar os dados: {e}")
+        st.stop() # Interrompe a execução para qualquer outro erro
 
-df_exp_total, df_imp_total = load_data()
+df_exp, df_imp = load_data()
 
-# Verifica se os dataframes foram carregados com sucesso
-if df_exp_total.empty or df_imp_total.empty:
-    st.error("Erro: Os arquivos .parquet não foram encontrados. Certifique-se de que estão na pasta 'parquet_files'.")
-    st.stop() # Interrompe a execução do script
+# O restante do código abaixo não precisa ser alterado, pois ele já está funcionando corretamente.
 
 # --- 1. Filtros na Primeira Linha ---
 col1, col2 = st.columns(2)
 
 with col1:
-    all_ufs = sorted(df_exp_total['SG_UF_NCM'].unique().tolist()) if 'SG_UF_NCM' in df_exp_total.columns else []
+    all_ufs = sorted(df_exp['SG_UF_NCM'].unique().tolist()) if 'SG_UF_NCM' in df_exp.columns else []
     default_ufs = ['SC'] if 'SC' in all_ufs else all_ufs
     selected_ufs = st.multiselect(
         "Selecione os Estados (UF)",
         options=all_ufs,
         default=default_ufs
     )
-    
+
 with col2:
-    all_years = sorted(df_exp_total['CO_ANO'].unique().tolist(), reverse=True) if 'CO_ANO' in df_exp_total.columns else []
+    all_years = sorted(df_exp['CO_ANO'].unique().tolist(), reverse=True) if 'CO_ANO' in df_exp.columns else []
     selected_year = st.selectbox(
         "Selecione o Ano",
         options=all_years,
@@ -74,14 +74,14 @@ st.markdown("---")
 col3, col4, col5 = st.columns(3)
 
 # Cria os dataframes filtrados para os cards, gráficos e tabelas principais
-df_exp_filtered = df_exp_total[
-    (df_exp_total['CO_ANO'] == selected_year) &
-    (df_exp_total['SG_UF_NCM'].isin(selected_ufs))
+df_exp_filtered = df_exp[
+    (df_exp['CO_ANO'] == selected_year) &
+    (df_exp['SG_UF_NCM'].isin(selected_ufs))
 ]
 
-df_imp_filtered = df_imp_total[
-    (df_imp_total['CO_ANO'] == selected_year) &
-    (df_imp_total['SG_UF_NCM'].isin(selected_ufs))
+df_imp_filtered = df_imp[
+    (df_imp['CO_ANO'] == selected_year) &
+    (df_imp['SG_UF_NCM'].isin(selected_ufs))
 ]
 
 # Cálculo dos totais
@@ -158,7 +158,7 @@ with col6:
     top_exp_products = df_chart_exp['NO_NCM_POR'].unique().tolist()
 
     if not df_chart_exp.empty:
-        df_exp_agg = df_exp_total[(df_exp_total['CO_ANO'].isin([selected_year-1, selected_year])) & (df_exp_total['SG_UF_NCM'].isin(selected_ufs))]
+        df_exp_agg = df_exp[(df_exp['CO_ANO'].isin([selected_year-1, selected_year])) & (df_exp['SG_UF_NCM'].isin(selected_ufs))]
         df_exp_agg = df_exp_agg.groupby(['CO_ANO', 'CO_NCM', 'NO_NCM_POR']).agg(
             VL_FOB=('VL_FOB', 'sum'),
             KG_LIQUIDO=('KG_LIQUIDO', 'sum')
@@ -248,7 +248,7 @@ with col7:
     top_imp_products = df_chart_imp['NO_NCM_POR'].unique().tolist()
     
     if not df_chart_imp.empty:
-        df_imp_agg = df_imp_total[(df_imp_total['CO_ANO'].isin([selected_year-1, selected_year])) & (df_imp_total['SG_UF_NCM'].isin(selected_ufs))]
+        df_imp_agg = df_imp[(df_imp['CO_ANO'].isin([selected_year-1, selected_year])) & (df_imp['SG_UF_NCM'].isin(selected_ufs))]
         df_imp_agg = df_imp_agg.groupby(['CO_ANO', 'CO_NCM', 'NO_NCM_POR']).agg(
             VL_FOB=('VL_FOB', 'sum'),
             KG_LIQUIDO=('KG_LIQUIDO', 'sum')
@@ -385,7 +385,7 @@ col10, col11 = st.columns(2)
 with col10:
     st.subheader(f"Destinos de Exportação / Variações Interanuais ({selected_year} vs {selected_year-1})")
     if not df_exp_filtered.empty:
-        df_exp_agg = df_exp_total[(df_exp_total['CO_ANO'].isin([selected_year-1, selected_year])) & (df_exp_total['SG_UF_NCM'].isin(selected_ufs))]
+        df_exp_agg = df_exp[(df_exp['CO_ANO'].isin([selected_year-1, selected_year])) & (df_exp['SG_UF_NCM'].isin(selected_ufs))]
         df_exp_agg = df_exp_agg.groupby(['CO_ANO', 'NO_PAIS']).agg(
             VL_FOB=('VL_FOB', 'sum'),
             KG_LIQUIDO=('KG_LIQUIDO', 'sum')
@@ -429,7 +429,7 @@ with col10:
                 'Participacao (%)': '{:.2f}%',
                 f'Preço Médio {selected_year-1} (US$/Kg)': '{:.2f}',
                 f'Preço Médio {selected_year} (US$/Kg)': '{:.2f}',
-                f'Variação Preço {selected_year}/{selected_year-1} (%)': '{:.2f}%',
+                f'Var. Preço {selected_year}/{selected_year-1} (%)': '{:.2f}%',
             }),
             use_container_width=True,
             hide_index=True
@@ -441,7 +441,7 @@ with col10:
 with col11:
     st.subheader(f"Origens de Importação / Variações Interanuais ({selected_year} vs {selected_year-1})")
     if not df_imp_filtered.empty:
-        df_imp_agg = df_imp_total[(df_imp_total['CO_ANO'].isin([selected_year-1, selected_year])) & (df_imp_total['SG_UF_NCM'].isin(selected_ufs))]
+        df_imp_agg = df_imp[(df_imp['CO_ANO'].isin([selected_year-1, selected_year])) & (df_imp['SG_UF_NCM'].isin(selected_ufs))]
         df_imp_agg = df_imp_agg.groupby(['CO_ANO', 'NO_PAIS']).agg(
             VL_FOB=('VL_FOB', 'sum'),
             KG_LIQUIDO=('KG_LIQUIDO', 'sum')
@@ -480,19 +480,18 @@ with col11:
         
         st.dataframe(
             top_10_imp_display.style.format({
-                'Valor FOB': lambda x: format_brl(x, 2),
-                'Total KG': lambda x: format_brl(x, 0),
+                'Valor FOB (US$)': lambda x: format_brl(x, 2),
+                'Total Kg': lambda x: format_brl(x, 0),
                 'Participacao (%)': '{:.2f}%',
-                f'Preço médio {selected_year-1} (US$/Kg)': '{:.2f}',
-                f'Preço médio {selected_year} (US$/Kg)': '{:.2f}',
-                f'Variação Preço {selected_year}/{selected_year-1} (%)': '{:.2f}%',
+                f'Preço Médio {selected_year-1} (US$/Kg)': '{:.2f}',
+                f'Preço Médio {selected_year} (US$/Kg)': '{:.2f}',
+                f'Var. Preço {selected_year}/{selected_year-1} (%)': '{:.2f}%',
             }),
             use_container_width=True,
             hide_index=True
         )
     else:
         st.info("Não há dados de importação para a seleção atual.")
-
 
 # --- 6. Treemaps de Países (Visão Geral) ---
 st.markdown("---")
@@ -501,7 +500,6 @@ col12, col13 = st.columns(2)
 
 with col12:
     st.subheader(f"Exportações (Total Geral) ({selected_year})")
-    
     df_exp_geral = df_exp_filtered.groupby('NO_PAIS').agg(
         VL_FOB=('VL_FOB', 'sum'),
         KG_LIQUIDO=('KG_LIQUIDO', 'sum')
@@ -523,7 +521,6 @@ with col12:
 
 with col13:
     st.subheader(f"Importações (Total Geral) ({selected_year})")
-
     df_imp_geral = df_imp_filtered.groupby('NO_PAIS').agg(
         VL_FOB=('VL_FOB', 'sum'),
         KG_LIQUIDO=('KG_LIQUIDO', 'sum')
