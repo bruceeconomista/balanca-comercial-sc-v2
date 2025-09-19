@@ -4,7 +4,6 @@ import requests
 import io
 import plotly.express as px
 import altair as alt
-from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 try:
     # Configura a página do Streamlit
@@ -15,11 +14,10 @@ try:
 
     st.title("Balança Comercial de Santa Catarina")
 
-    # URLs para os arquivos Parquet no Hugging Face Hub.
-    # Por favor, substitua 'bruceeconomista' e 'balanca-comercial-sc-v2-dados'
-    # pelos seus dados de usuário e repositório reais.
-    EXP_URL = "https://huggingface.co/datasets/bruceeconomista/balanca-comercial-sc-v2-dados/resolve/main/EXP_TOTAL.parquet?download=true"
-    IMP_URL = "https://huggingface.co/datasets/bruceeconomista/balanca-comercial-sc-v2-dados/resolve/main/IMP_TOTAL.parquet?download=true"
+    # URLs para os arquivos CSV no Hugging Face Hub.
+    # Por favor, verifique se estes arquivos estão no seu repositório.
+    EXP_URL = "https://huggingface.co/datasets/bruceeconomista/balanca-comercial-sc-v2-dados/resolve/main/EXP_TOTAL.csv?download=true"
+    IMP_URL = "https://huggingface.co/datasets/bruceeconomista/balanca-comercial-sc-v2-dados/resolve/main/IMP_TOTAL.csv?download=true"
 
     def validate_columns(df, required_columns):
         """
@@ -32,7 +30,7 @@ try:
     @st.cache_data
     def load_data_from_huggingface():
         """
-        Baixa e carrega os dados dos arquivos Parquet a partir do Hugging Face Hub.
+        Baixa e carrega os dados dos arquivos CSV a partir do Hugging Face Hub.
         Usa o cache do Streamlit para evitar recarregar a cada interação.
         """
         required_columns = ['CO_ANO', 'SG_UF', 'NO_PAIS', 'NO_NCM_POR', 'VL_FOB', 'KG_LIQUIDO']
@@ -42,16 +40,18 @@ try:
 
             # Baixar o arquivo de exportação
             response_exp = requests.get(EXP_URL)
-            response_exp.raise_for_status() # Lança um erro para status de HTTP ruins
-            exp_bytes = io.BytesIO(response_exp.content)
+            if response_exp.status_code != 200:
+                st.error(f"Erro ao baixar o arquivo de exportação. Status: {response_exp.status_code}")
+                st.stop()
 
             # Baixar o arquivo de importação
             response_imp = requests.get(IMP_URL)
-            response_imp.raise_for_status() # Lança um erro para status de HTTP ruins
-            imp_bytes = io.BytesIO(response_imp.content)
+            if response_imp.status_code != 200:
+                st.error(f"Erro ao baixar o arquivo de importação. Status: {response_imp.status_code}")
+                st.stop()
 
-            df_exp = pd.read_parquet(exp_bytes)
-            df_imp = pd.read_parquet(imp_bytes)
+            df_exp = pd.read_csv(io.StringIO(response_exp.text))
+            df_imp = pd.read_csv(io.StringIO(response_imp.text))
 
             # Limpar os nomes das colunas de forma defensiva
             df_exp.columns = [col.replace('ï»¿', '').strip() for col in df_exp.columns]
@@ -63,18 +63,16 @@ try:
 
             if not exp_valid:
                 st.error(f"Erro: As seguintes colunas estão faltando no arquivo de exportação: {exp_missing}")
+                st.stop()
             if not imp_valid:
                 st.error(f"Erro: As seguintes colunas estão faltando no arquivo de importação: {imp_missing}")
-
-            if not exp_valid or not imp_valid:
-                return pd.DataFrame(), pd.DataFrame()
+                st.stop()
             
             return df_exp, df_imp
-        except requests.exceptions.HTTPError as e:
-            st.error(f"Erro HTTP ao baixar os arquivos. Verifique se as URLs estão corretas e se o repositório é público: {e}")
-            return pd.DataFrame(), pd.DataFrame()
         except Exception as e:
-            st.error(f"Erro inesperado ao carregar os dados: {e}")
+            st.error("Ocorreu um erro ao carregar os dados. Verifique a URL e a integridade dos arquivos.")
+            st.exception(e) # Mostra o erro completo
+            st.stop()
             return pd.DataFrame(), pd.DataFrame()
 
     # Inicia o carregamento dos dados
@@ -188,5 +186,5 @@ try:
         st.warning("Aguardando dados... Certifique-se de que as URLs no código estão corretas e o seu repositório está acessível.")
 
 except Exception as e:
-    st.error("Ocorreu um erro inesperado. Por favor, tente novamente mais tarde.")
-    st.error(f"Detalhes do erro: {e}")
+    st.error("Ocorreu um erro inesperado na sua aplicação.")
+    st.exception(e)
