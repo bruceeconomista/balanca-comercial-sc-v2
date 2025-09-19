@@ -4,6 +4,7 @@ import os
 import altair as alt
 import plotly.express as px
 import sys
+import traceback
 
 # O Streamlit é um framework para criar aplicativos da web com Python.
 # O `try` inicia um bloco onde tentamos executar o código. Se um erro ocorrer,
@@ -416,4 +417,7 @@ except Exception as e:
     st.write("---")
     st.header("Detalhes Técnicos do Erro")
     st.exception(e)  # Imprime o erro completo na tela do usuário para depuração
+    st.write("---")
+    st.text("Detalhes do Traceback:")
+    st.code(traceback.format_exc()) # Imprime o traceback completo para depuração
     st.stop()
