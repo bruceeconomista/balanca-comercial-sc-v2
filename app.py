@@ -17,7 +17,7 @@ st.markdown("Análise dos dados de importação e exportação do estado de Sant
 
 # Tentar carregar os dados
 try:
-    df_geral = pd.read_csv("https://github.com/bruceeconomista/balanca-comercial-sc-v2.git", sep=';')
+    df_geral = pd.read_csv("https://raw.githubusercontent.com/bruceeconomista/balanca-comercial-sc-v2/main/balanca_comercial_sc.csv", sep=';')
     st.write("Dados carregados com sucesso!")
 except Exception as e:
     st.error(f"Erro ao carregar os dados: {e}")
@@ -26,7 +26,7 @@ except Exception as e:
 # Tentar processar os dados
 try:
     df_geral['CO_ANO'] = df_geral['CO_ANO'].astype(int)
-    df_geral['DT_NCM'] = pd.to_datetime(df_geral['DT_NCM'])
+    # df_geral['DT_NCM'] = pd.to_datetime(df_geral['DT_NCM']) # Comentado para evitar erro
     df_geral['KG_LIQUIDO'] = df_geral['KG_LIQUIDO'].astype(float)
     df_geral['VL_FOB'] = df_geral['VL_FOB'].astype(float)
 except Exception as e:
@@ -102,40 +102,38 @@ try:
 except Exception as e:
     st.error(f"Erro ao gerar gráfico de pizza: {e}")
 
+
 # Mapa usando Pydeck
 try:
-    # A partir daqui, o código original será comentado para testar
-    # a renderização sem os gráficos mais complexos.
-    # df_mapa = df_filtrado.groupby(['NO_PAIS_ORIGEM', 'SG_UF_NCM']).agg(
-    #     lat=('lat', 'first'),
-    #     lon=('lon', 'first'),
-    #     total_fob=('VL_FOB', 'sum')
-    # ).reset_index()
+    df_mapa = df_filtrado.groupby(['NO_PAIS_ORIGEM', 'SG_UF_NCM']).agg(
+        lat=('lat', 'first'),
+        lon=('lon', 'first'),
+        total_fob=('VL_FOB', 'sum')
+    ).reset_index()
 
-    # layer = pdk.Layer(
-    #     'HeatmapLayer',
-    #     data=df_mapa,
-    #     opacity=0.9,
-    #     get_position=['lon', 'lat'],
-    #     threshold=0.01
-    # )
+    layer = pdk.Layer(
+        'HeatmapLayer',
+        data=df_mapa,
+        opacity=0.9,
+        get_position=['lon', 'lat'],
+        threshold=0.01
+    )
 
-    # view_state = pdk.ViewState(
-    #     latitude=-27.5969,
-    #     longitude=-48.5495,
-    #     zoom=5,
-    #     pitch=50
-    # )
+    view_state = pdk.ViewState(
+        latitude=-27.5969,
+        longitude=-48.5495,
+        zoom=5,
+        pitch=50
+    )
 
-    # r = pdk.Deck(
-    #     layers=[layer],
-    #     initial_view_state=view_state,
-    #     tooltip={"text": "{NO_PAIS_ORIGEM}\nTotal FOB: {total_fob}"}
-    # )
+    r = pdk.Deck(
+        layers=[layer],
+        initial_view_state=view_state,
+        tooltip={"text": "{NO_PAIS_ORIGEM}\nTotal FOB: {total_fob}"}
+    )
 
-    # st.pydeck_chart(r)
-    # st.write("Mapa gerado com sucesso!")
-    st.write("O mapa do Pydeck está temporariamente desabilitado para testes.")
+    st.pydeck_chart(r)
+    st.write("Mapa gerado com sucesso!")
 
 except Exception as e:
     st.error(f"Erro ao gerar o mapa: {e}")
