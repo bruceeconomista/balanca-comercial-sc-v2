@@ -282,11 +282,25 @@ try:
 
     col10, col11 = st.columns(2)
 
+    # Lógica dinâmica para anos de referência
+    anos_para_comparar_exp = sorted(df_exp['CO_ANO'].unique())
+    if len(anos_para_comparar_exp) >= 2:
+        anos_ref_exp = anos_para_comparar_exp[-2:]
+    else:
+        anos_ref_exp = anos_para_comparar_exp
+
+    anos_para_comparar_imp = sorted(df_imp['CO_ANO'].unique())
+    if len(anos_para_comparar_imp) >= 2:
+        anos_ref_imp = anos_para_comparar_imp[-2:]
+    else:
+        anos_ref_imp = anos_para_comparar_imp
+
+
     # Código para a tabela de exportação
     with col10:
         st.subheader("10 Maiores Destinos de Exportação / Variações Interanuais")
-        if not df_exp_filtered_sc.empty:
-            df_exp_agg = df_exp[(df_exp['CO_ANO'].isin([2023, 2024])) & (df_exp['SG_UF_NCM'].isin(selected_ufs))]
+        if not df_exp.empty:
+            df_exp_agg = df_exp[df_exp['CO_ANO'].isin(anos_ref_exp) & df_exp['SG_UF_NCM'].isin(selected_ufs)]
             if not df_exp_agg.empty:
                 df_exp_agg = df_exp_agg.groupby(['CO_ANO', 'NO_PAIS']).agg(
                     VL_FOB=('VL_FOB', 'sum'),
@@ -297,28 +311,35 @@ try:
                 df_pivot.columns = [f'{metric}_{year}' for metric, year in df_pivot.columns]
                 df_pivot = df_pivot.reset_index()
 
-                df_pivot['Preço Médio 2023 (US$/Kg)'] = df_pivot.apply(
-                    lambda row: row['VL_FOB_2023'] / row['KG_LIQUIDO_2023'] if row['KG_LIQUIDO_2023'] > 0 else 0, axis=1
-                )
-                df_pivot['Preço Médio 2024 (US$/Kg)'] = df_pivot.apply(
-                    lambda row: row['VL_FOB_2024'] / row['KG_LIQUIDO_2024'] if row['KG_LIQUIDO_2024'] > 0 else 0, axis=1
-                )
+                for ano in anos_ref_exp:
+                    if f'VL_FOB_{ano}' in df_pivot.columns and f'KG_LIQUIDO_{ano}' in df_pivot.columns:
+                        df_pivot[f'Preço Médio {ano} (US$/Kg)'] = df_pivot.apply(
+                            lambda row: row[f'VL_FOB_{ano}'] / row[f'KG_LIQUIDO_{ano}'] if row[f'KG_LIQUIDO_{ano}'] > 0 else 0,
+                            axis=1
+                        )
 
-                df_pivot['Var. Preço 24/23 (%)'] = df_pivot.apply(
-                    lambda row: ((row['Preço Médio 2024 (US$/Kg)'] - row['Preço Médio 2023 (US$/Kg)']) / row['Preço Médio 2023 (US$/Kg)'] * 100) if row['Preço Médio 2023 (US$/Kg)'] > 0 else 0, axis=1
-                )
+                if len(anos_ref_exp) == 2:
+                    ano_base, ano_atual = anos_ref_exp
+                    if f'Preço Médio {ano_base} (US$/Kg)' in df_pivot.columns and f'Preço Médio {ano_atual} (US$/Kg)' in df_pivot.columns:
+                        df_pivot['Var. Preço 24/23 (%)'] = df_pivot.apply(
+                            lambda row: ((row[f'Preço Médio {ano_atual} (US$/Kg)'] - row[f'Preço Médio {ano_base} (US$/Kg)']) / row[f'Preço Médio {ano_base} (US$/Kg)'] * 100) if row[f'Preço Médio {ano_base} (US$/Kg)'] > 0 else 0, axis=1
+                        )
                 
-                total_fob_2024 = df_pivot['VL_FOB_2024'].sum()
-                df_pivot['Participacao (%)'] = (df_pivot['VL_FOB_2024'] / total_fob_2024) * 100 if total_fob_2024 > 0 else 0
+                total_fob_ultimo_ano = df_pivot[f'VL_FOB_{anos_ref_exp[-1]}'].sum()
+                df_pivot['Participacao (%)'] = (df_pivot[f'VL_FOB_{anos_ref_exp[-1]}'] / total_fob_ultimo_ano) * 100 if total_fob_ultimo_ano > 0 else 0
                 
-                top_10_exp = df_pivot.nlargest(10, 'VL_FOB_2024').reset_index(drop=True)
+                top_10_exp = df_pivot.nlargest(10, f'VL_FOB_{anos_ref_exp[-1]}').reset_index(drop=True)
                 top_10_exp = top_10_exp.rename(columns={
                     'NO_PAIS': 'País',
-                    'VL_FOB_2024': 'Valor FOB (US$)',
-                    'KG_LIQUIDO_2024': 'Total Kg'
+                    f'VL_FOB_{anos_ref_exp[-1]}': 'Valor FOB (US$)',
+                    f'KG_LIQUIDO_{anos_ref_exp[-1]}': 'Total Kg'
                 })
                 
-                top_10_exp_display = top_10_exp[['País', 'Valor FOB (US$)', 'Total Kg', 'Participacao (%)', 'Preço Médio 2023 (US$/Kg)', 'Preço Médio 2024 (US$/Kg)', 'Var. Preço 24/23 (%)']]
+                columns_to_display_exp = ['País', 'Valor FOB (US$)', 'Total Kg', 'Participacao (%)']
+                if len(anos_ref_exp) == 2:
+                    columns_to_display_exp.extend([f'Preço Médio {anos_ref_exp[0]} (US$/Kg)', f'Preço Médio {anos_ref_exp[1]} (US$/Kg)', 'Var. Preço 24/23 (%)'])
+                
+                top_10_exp_display = top_10_exp[columns_to_display_exp]
 
                 st.dataframe(
                     top_10_exp_display.style.format({
@@ -332,16 +353,15 @@ try:
                     use_container_width=True
                 )
             else:
-                st.info("Não há dados de exportação para 2023 ou 2024 na seleção atual.")
+                st.info("Não há dados de exportação para os anos de referência na seleção atual.")
         else:
             st.info("Não há dados de exportação para a seleção atual.")
-
 
     # Código para a tabela de importação
     with col11:
         st.subheader("10 Maiores Destinos de Importação / Variações Interanuais")
-        if not df_imp_filtered_sc.empty:
-            df_imp_agg = df_imp[(df_imp['CO_ANO'].isin([2023, 2024])) & (df_imp['SG_UF_NCM'].isin(selected_ufs))]
+        if not df_imp.empty:
+            df_imp_agg = df_imp[df_imp['CO_ANO'].isin(anos_ref_imp) & df_imp['SG_UF_NCM'].isin(selected_ufs)]
             if not df_imp_agg.empty:
                 df_imp_agg = df_imp_agg.groupby(['CO_ANO', 'NO_PAIS']).agg(
                     VL_FOB=('VL_FOB', 'sum'),
@@ -352,27 +372,35 @@ try:
                 df_imp_pivot.columns = [f'{metric}_{year}' for metric, year in df_imp_pivot.columns]
                 df_imp_pivot = df_imp_pivot.reset_index()
 
-                df_imp_pivot['Preço Médio 2023 (US$/Kg)'] = df_imp_pivot.apply(
-                    lambda row: row['VL_FOB_2023'] / row['KG_LIQUIDO_2023'] if row['KG_LIQUIDO_2023'] > 0 else 0, axis=1
-                )
-                df_imp_pivot['Preço Médio 2024 (US$/Kg)'] = df_imp_pivot.apply(
-                    lambda row: row['VL_FOB_2024'] / row['KG_LIQUIDO_2024'] if row['KG_LIQUIDO_2024'] > 0 else 0, axis=1
-                )
-                df_imp_pivot['Var. Preço 24/23 (%)'] = df_imp_pivot.apply(
-                    lambda row: ((row['Preço Médio 2024 (US$/Kg)'] - row['Preço Médio 2023 (US$/Kg)']) / row['Preço Médio 2023 (US$/Kg)'] * 100) if row['Preço Médio 2023 (US$/Kg)'] > 0 else 0, axis=1
-                )
+                for ano in anos_ref_imp:
+                    if f'VL_FOB_{ano}' in df_imp_pivot.columns and f'KG_LIQUIDO_{ano}' in df_imp_pivot.columns:
+                        df_imp_pivot[f'Preço Médio {ano} (US$/Kg)'] = df_imp_pivot.apply(
+                            lambda row: row[f'VL_FOB_{ano}'] / row[f'KG_LIQUIDO_{ano}'] if row[f'KG_LIQUIDO_{ano}'] > 0 else 0,
+                            axis=1
+                        )
                 
-                total_imp_2024 = df_imp_pivot['VL_FOB_2024'].sum()
-                df_imp_pivot['Participacao (%)'] = (df_imp_pivot['VL_FOB_2024'] / total_imp_2024) * 100 if total_imp_2024 > 0 else 0
+                if len(anos_ref_imp) == 2:
+                    ano_base, ano_atual = anos_ref_imp
+                    if f'Preço Médio {ano_base} (US$/Kg)' in df_imp_pivot.columns and f'Preço Médio {ano_atual} (US$/Kg)' in df_imp_pivot.columns:
+                        df_imp_pivot['Var. Preço 24/23 (%)'] = df_imp_pivot.apply(
+                            lambda row: ((row[f'Preço Médio {ano_atual} (US$/Kg)'] - row[f'Preço Médio {ano_base} (US$/Kg)']) / row[f'Preço Médio {ano_base} (US$/Kg)'] * 100) if row[f'Preço Médio {ano_base} (US$/Kg)'] > 0 else 0, axis=1
+                        )
+                
+                total_imp_ultimo_ano = df_imp_pivot[f'VL_FOB_{anos_ref_imp[-1]}'].sum()
+                df_imp_pivot['Participacao (%)'] = (df_imp_pivot[f'VL_FOB_{anos_ref_imp[-1]}'] / total_imp_ultimo_ano) * 100 if total_imp_ultimo_ano > 0 else 0
 
-                top_10_imp = df_imp_pivot.nlargest(10, 'VL_FOB_2024').reset_index(drop=True)
+                top_10_imp = df_imp_pivot.nlargest(10, f'VL_FOB_{anos_ref_imp[-1]}').reset_index(drop=True)
                 top_10_imp = top_10_imp.rename(columns={
                     'NO_PAIS': 'País',
-                    'VL_FOB_2024': 'Valor FOB (US$)',
-                    'KG_LIQUIDO_2024': 'Total Kg'
+                    f'VL_FOB_{anos_ref_imp[-1]}': 'Valor FOB (US$)',
+                    f'KG_LIQUIDO_{anos_ref_imp[-1]}': 'Total Kg'
                 })
                 
-                top_10_imp_display = top_10_imp[['País', 'Valor FOB (US$)', 'Total Kg', 'Participacao (%)', 'Preço Médio 2023 (US$/Kg)', 'Preço Médio 2024 (US$/Kg)', 'Var. Preço 24/23 (%)']]
+                columns_to_display_imp = ['País', 'Valor FOB (US$)', 'Total Kg', 'Participacao (%)']
+                if len(anos_ref_imp) == 2:
+                    columns_to_display_imp.extend([f'Preço Médio {anos_ref_imp[0]} (US$/Kg)', f'Preço Médio {anos_ref_imp[1]} (US$/Kg)', 'Var. Preço 24/23 (%)'])
+                
+                top_10_imp_display = top_10_imp[columns_to_display_imp]
                 
                 st.dataframe(
                     top_10_imp_display.style.format({
@@ -386,7 +414,7 @@ try:
                     use_container_width=True
                 )
             else:
-                st.info("Não há dados de importação para 2023 ou 2024 na seleção atual.")
+                st.info("Não há dados de importação para os anos de referência na seleção atual.")
         else:
             st.info("Não há dados de importação para a seleção atual.")
 
