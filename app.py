@@ -31,19 +31,10 @@ try:
             df_exp = pd.read_parquet(exp_path)
             df_imp = pd.read_parquet(imp_path)
             
-            # Limpar os nomes das colunas e corrigir a codificação
+            # Limpar os nomes das colunas
             df_exp.columns = [col.replace('ï»¿', '') for col in df_exp.columns]
             df_imp.columns = [col.replace('ï»¿', '') for col in df_imp.columns]
             
-            # --- CORREÇÃO DE CODIFICAÇÃO ---
-            # A codificação dos caracteres especiais deve ser corrigida em todas as colunas de texto
-            # A decodificação UTF-8 pode ser o problema aqui, vamos tentar outra abordagem
-            # ou verificar se a coluna realmente precisa de decodificação.
-            # df_exp['NO_NCM_POR'] = df_exp['NO_NCM_POR'].str.encode('latin1').str.decode('utf8')
-            # df_imp['NO_NCM_POR'] = df_imp['NO_NCM_POR'].str.encode('latin1').str.decode('utf8')
-            # df_exp['NO_PAIS'] = df_exp['NO_PAIS'].str.encode('latin1').str.decode('utf8')
-            # df_imp['NO_PAIS'] = df_imp['NO_PAIS'].str.encode('latin1').str.decode('utf8')
-
             return df_exp, df_imp
         except FileNotFoundError:
             st.error("Erro: Os arquivos .parquet não foram encontrados. Certifique-se de que estão na pasta 'parquet_files'.")
@@ -51,6 +42,17 @@ try:
             return pd.DataFrame(), pd.DataFrame()
 
     df_exp, df_imp = load_data()
+
+    # Combinar os dataframes para obter os anos disponíveis
+    if not df_exp.empty and not df_imp.empty:
+        df_geral = pd.concat([df_exp, df_imp])
+        anos_validos = df_geral['CO_ANO'].unique().tolist()
+    elif not df_exp.empty:
+        anos_validos = df_exp['CO_ANO'].unique().tolist()
+    elif not df_imp.empty:
+        anos_validos = df_imp['CO_ANO'].unique().tolist()
+    else:
+        anos_validos = []
 
     # --- 1. Filtros na Primeira Linha ---
     col1, col2 = st.columns(2)
@@ -69,23 +71,34 @@ try:
             selected_ufs = []
     
     with col2:
-        st.write("") # Espaço em branco para manter alinhamento
+        if anos_validos:
+            min_ano = int(min(anos_validos))
+            max_ano = int(max(anos_validos))
+            ano_selecionado = st.slider(
+                "Ano",
+                min_value=min_ano,
+                max_value=max_ano,
+                value=max_ano
+            )
+        else:
+            st.warning("Não foi possível determinar os anos do conjunto de dados.")
+            ano_selecionado = 2023 # Valor padrão em caso de erro
+
+    # Cria os dataframes filtrados para os cards, gráficos e tabelas principais
+    df_exp_filtered_sc = df_exp[
+        (df_exp['CO_ANO'] == ano_selecionado) &
+        (df_exp['SG_UF_NCM'].isin(selected_ufs))
+    ]
+
+    df_imp_filtered_sc = df_imp[
+        (df_imp['CO_ANO'] == ano_selecionado) &
+        (df_imp['SG_UF_NCM'].isin(selected_ufs))
+    ]
 
 
     # --- 2. Cards de resumo ---
     st.markdown("---")
     col3, col4, col5 = st.columns(3)
-
-    # Cria os dataframes filtrados para os cards, gráficos e tabelas principais
-    df_exp_filtered_sc = df_exp[
-        (df_exp['CO_ANO'] == 2024) &
-        (df_exp['SG_UF_NCM'].isin(selected_ufs))
-    ]
-
-    df_imp_filtered_sc = df_imp[
-        (df_imp['CO_ANO'] == 2024) &
-        (df_imp['SG_UF_NCM'].isin(selected_ufs))
-    ]
 
     # Cálculo dos totais
     total_exp = df_exp_filtered_sc['VL_FOB'].sum()
@@ -142,12 +155,11 @@ try:
 
         chart_exp = alt.Chart(df_chart_exp).mark_bar().encode(
             x=alt.X('CO_NCM:N', title='Código NCM', sort='-y'),
-            # --- CORREÇÃO DE FORMATAÇÃO DO EIXO Y ---
             y=alt.Y('VL_FOB', title='Valor FOB (US$)', axis=alt.Axis(format='~s')),
             tooltip=[
                 alt.Tooltip('NO_NCM_POR', title='Nome do Produto'),
                 alt.Tooltip('KG_LIQUIDO', title='Total de Kg', format=',.0f'),
-                alt.Tooltip('VL_FOB', title='Valor FOB (US$)', format=',.2f') # Removida a formatação em string para evitar erro
+                alt.Tooltip('VL_FOB', title='Valor FOB (US$)', format=',.2f')
             ]
         ).properties(
             title=f'{num_products_exp} Produtos Mais Exportados'
@@ -172,12 +184,11 @@ try:
         
         chart_imp = alt.Chart(df_chart_imp).mark_bar(color='#E57F84').encode(
             x=alt.X('CO_NCM:N', title='Código NCM', sort='-y'),
-            # --- CORREÇÃO DE FORMATAÇÃO DO EIXO Y ---
             y=alt.Y('VL_FOB', title='Valor FOB (US$)', axis=alt.Axis(format='~s')),
             tooltip=[
                 alt.Tooltip('NO_NCM_POR', title='Nome do Produto'),
                 alt.Tooltip('KG_LIQUIDO', title='Total de Kg', format=',.0f'),
-                alt.Tooltip('VL_FOB', title='Valor FOB (US$)', format=',.2f') # Removida a formatação em string para evitar erro
+                alt.Tooltip('VL_FOB', title='Valor FOB (US$)', format=',.2f')
             ]
         ).properties(
             title=f'{num_products_imp} Produtos Mais Importados'
@@ -364,6 +375,7 @@ try:
         else:
             st.info("Não há dados de importação para a seleção atual.")
 
+
     # --- 6. Treemaps de Países (Visão Geral) ---
     st.markdown("---")
     st.header("TAREFA 2 - Análise de Países por Total Geral de Comércio")
@@ -416,8 +428,8 @@ except Exception as e:
     st.error("Ocorreu um erro inesperado ao executar o aplicativo. Por favor, entre em contato com o administrador.")
     st.write("---")
     st.header("Detalhes Técnicos do Erro")
-    st.exception(e)  # Imprime o erro completo na tela do usuário para depuração
+    st.exception(e)
     st.write("---")
     st.text("Detalhes do Traceback:")
-    st.code(traceback.format_exc()) # Imprime o traceback completo para depuração
+    st.code(traceback.format_exc())
     st.stop()
