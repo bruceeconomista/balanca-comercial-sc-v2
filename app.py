@@ -3,7 +3,6 @@ import pandas as pd
 import os
 import altair as alt
 import plotly.express as px
-import sys
 
 # O Streamlit é um framework para criar aplicativos da web com Python.
 # O `try` inicia um bloco onde tentamos executar o código. Se um erro ocorrer,
@@ -27,6 +26,12 @@ try:
             exp_path = os.path.join(PARQUET_FOLDER, EXP_FILE)
             imp_path = os.path.join(PARQUET_FOLDER, IMP_FILE)
 
+            # Verificar se os arquivos de dados existem no caminho especificado
+            if not os.path.exists(exp_path) or not os.path.exists(imp_path):
+                st.error("Erro: Os arquivos .parquet não foram encontrados. Certifique-se de que estão na pasta 'parquet_files'.")
+                st.stop()
+                return pd.DataFrame(), pd.DataFrame()
+
             df_exp = pd.read_parquet(exp_path)
             df_imp = pd.read_parquet(imp_path)
             
@@ -34,38 +39,30 @@ try:
             df_exp.columns = [col.replace('ï»¿', '') for col in df_exp.columns]
             df_imp.columns = [col.replace('ï»¿', '') for col in df_imp.columns]
             
-            # --- CORREÇÃO DE CODIFICAÇÃO ---
-            # A codificação dos caracteres especiais deve ser corrigida em todas as colunas de texto
-            # A decodificação UTF-8 pode ser o problema aqui, vamos tentar outra abordagem
-            # ou verificar se a coluna realmente precisa de decodificação.
-            # df_exp['NO_NCM_POR'] = df_exp['NO_NCM_POR'].str.encode('latin1').str.decode('utf8')
-            # df_imp['NO_NCM_POR'] = df_imp['NO_NCM_POR'].str.encode('latin1').str.decode('utf8')
-            # df_exp['NO_PAIS'] = df_exp['NO_PAIS'].str.encode('latin1').str.decode('utf8')
-            # df_imp['NO_PAIS'] = df_imp['NO_PAIS'].str.encode('latin1').str.decode('utf8')
-
             return df_exp, df_imp
-        except FileNotFoundError:
-            st.error("Erro: Os arquivos .parquet não foram encontrados. Certifique-se de que estão na pasta 'parquet_files'.")
+        except Exception as e:
+            st.error(f"Ocorreu um erro ao carregar os dados: {e}")
             st.stop()
             return pd.DataFrame(), pd.DataFrame()
 
     df_exp, df_imp = load_data()
+
+    # Se os dataframes estiverem vazios, parar a execução
+    if df_exp.empty or df_imp.empty:
+        st.stop()
 
     # --- 1. Filtros na Primeira Linha ---
     col1, col2 = st.columns(2)
 
     with col1:
         # A verificação 'if not df_exp.empty' é crucial para evitar erros se os dados não forem carregados
-        if not df_exp.empty:
-            all_ufs = df_exp['SG_UF_NCM'].unique().tolist()
-            default_ufs = ['SC'] if 'SC' in all_ufs else all_ufs
-            selected_ufs = st.multiselect(
-                "Selecione os Estados (UF)",
-                options=all_ufs,
-                default=default_ufs
-            )
-        else:
-            selected_ufs = []
+        all_ufs = df_exp['SG_UF_NCM'].unique().tolist()
+        default_ufs = ['SC'] if 'SC' in all_ufs else all_ufs
+        selected_ufs = st.multiselect(
+            "Selecione os Estados (UF)",
+            options=all_ufs,
+            default=default_ufs
+        )
     
     with col2:
         st.write("") # Espaço em branco para manter alinhamento
@@ -416,4 +413,3 @@ except Exception as e:
     st.write("---")
     st.header("Detalhes Técnicos do Erro")
     st.exception(e)  # Imprime o erro completo na tela do usuário para depuração
-    st.stop()
