@@ -23,9 +23,18 @@ def load_data(selected_year):
         df_exp = pd.read_parquet(exp_path)
         df_imp = pd.read_parquet(imp_path)
         
-        # Remover caracteres de encoding incorretos se existirem
-        df_exp.columns = [col.replace('ï»¿', '') for col in df_exp.columns]
-        df_imp.columns = [col.replace('ï»¿', '') for col in df_imp.columns]
+        # Mapeamento dos nomes de colunas esperados
+        column_mapping = {
+            'CO_NCM': 'CO_NCM',
+            'NO_NCM_POR': 'NO_NCM_POR',
+            'CO_ANO': 'CO_ANO',
+            'VL_FOB': 'VL_FOB',
+            'KG_LIQUIDO': 'KG_LIQUIDO'
+        }
+
+        # Renomear colunas para garantir que o resto do script funcione
+        df_exp.rename(columns=column_mapping, inplace=True)
+        df_imp.rename(columns=column_mapping, inplace=True)
         
         return df_exp, df_imp
     except FileNotFoundError:
@@ -54,12 +63,10 @@ st.markdown("---")
 col3, col4, col5 = st.columns(3)
 
 if not df_exp.empty and not df_imp.empty:
-    # Cálculo dos totais
     total_exp = df_exp['VL_FOB'].sum()
     total_imp = df_imp['VL_FOB'].sum()
     balanca_comercial = total_exp - total_imp
 
-    # Funções de formatação
     def format_brl(value, decimals=2):
         return f"{value:,.{decimals}f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
