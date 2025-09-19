@@ -67,19 +67,11 @@ try:
             selected_ufs = []
     
     with col2:
+        # Determina o ano mais recente disponível para análise
         if anos_validos:
             anos_validos = sorted(anos_validos)
-            if len(anos_validos) == 1:
-                ano_selecionado = st.selectbox("Ano", anos_validos)
-            else:
-                min_ano = int(min(anos_validos))
-                max_ano = int(max(anos_validos))
-                ano_selecionado = st.slider(
-                    "Ano",
-                    min_value=min_ano,
-                    max_value=max_ano,
-                    value=max_ano
-                )
+            ano_selecionado = anos_validos[-1]
+            st.info(f"Análise focada no ano mais recente disponível: **{ano_selecionado}**")
         else:
             st.warning("Não foi possível determinar os anos do conjunto de dados.")
             ano_selecionado = 2023 # Valor padrão em caso de erro
