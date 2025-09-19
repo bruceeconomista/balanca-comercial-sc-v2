@@ -13,11 +13,19 @@ try:
 
     st.title("Balança Comercial de Santa Catarina")
 
+    def validate_columns(df, required_columns):
+        """
+        Verifica se as colunas necessárias estão presentes no DataFrame.
+        Retorna True se todas as colunas existirem, caso contrário retorna False e a lista de colunas faltantes.
+        """
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        return not missing_columns, missing_columns
+
     @st.cache_data
     def load_data(exp_file, imp_file):
         """
-        Carrega os dados dos arquivos Parquet enviados pelo usuário.
-        Usa o cache do Streamlit para evitar recarregar a cada interação.
+        Carrega os dados dos arquivos Parquet enviados pelo usuário,
+        valida as colunas e retorna os DataFrames.
         """
         if exp_file is None or imp_file is None:
             return pd.DataFrame(), pd.DataFrame()
@@ -26,13 +34,28 @@ try:
             df_exp = pd.read_parquet(exp_file)
             df_imp = pd.read_parquet(imp_file)
             
-            # Limpar os nomes das colunas
+            # Limpar os nomes das colunas de forma defensiva
             df_exp.columns = [col.replace('ï»¿', '') for col in df_exp.columns]
             df_imp.columns = [col.replace('ï»¿', '') for col in df_imp.columns]
+
+            required_cols = ['CO_ANO', 'SG_UF_NCM', 'NO_NCM_POR', 'VL_FOB', 'KG_LIQUIDO', 'NO_PAIS']
             
+            exp_ok, exp_missing = validate_columns(df_exp, required_cols)
+            imp_ok, imp_missing = validate_columns(df_imp, required_cols)
+
+            if not exp_ok or not imp_ok:
+                error_msg = "Seu arquivo de dados está faltando colunas essenciais.\n"
+                if not exp_ok:
+                    error_msg += f"- Exportações: Colunas faltantes: {', '.join(exp_missing)}\n"
+                if not imp_ok:
+                    error_msg += f"- Importações: Colunas faltantes: {', '.join(imp_missing)}\n"
+                raise ValueError(error_msg)
+
             return df_exp, df_imp
+        
         except Exception as e:
-            st.error(f"Erro ao ler os arquivos Parquet. Verifique se os arquivos estão corretos: {e}")
+            st.error(f"Erro ao ler os arquivos Parquet. Por favor, verifique se os arquivos estão no formato correto e contêm os dados esperados.")
+            st.exception(e) # Exibe o erro detalhado para o desenvolvedor
             st.stop()
             return pd.DataFrame(), pd.DataFrame()
 
