@@ -1,0 +1,52 @@
+[
+    {
+        "NO_NCM_POR":"Gas\u00f3leo (\u00f3leo diesel)",
+        "VL_FOB":9690642650,
+        "KG_LIQUIDO":12176563085
+    },
+    {
+        "NO_NCM_POR":"\u00d3leos brutos de petr\u00f3leo",
+        "VL_FOB":9058456152,
+        "KG_LIQUIDO":14317293257
+    },
+    {
+        "NO_NCM_POR":"Outros cloretos de pot\u00e1ssio",
+        "VL_FOB":4845303451,
+        "KG_LIQUIDO":13031146961
+    },
+    {
+        "NO_NCM_POR":"C\u00e9lulas fotovoltaicas montadas em m\u00f3dulos ou em pain\u00e9is",
+        "VL_FOB":3846769906,
+        "KG_LIQUIDO":989251830
+    },
+    {
+        "NO_NCM_POR":"Hulha betuminosa, n\u00e3o aglomerada",
+        "VL_FOB":3630149144,
+        "KG_LIQUIDO":16004263490
+    },
+    {
+        "NO_NCM_POR":"Partes de turborreatores ou de turbopropulsores",
+        "VL_FOB":3514955381,
+        "KG_LIQUIDO":249956
+    },
+    {
+        "NO_NCM_POR":"Turborreatores de empuxo superior a 25 kN",
+        "VL_FOB":2852494764,
+        "KG_LIQUIDO":2022930
+    },
+    {
+        "NO_NCM_POR":"Diidrogeno-ortofosfato de am\u00f4nio (fosfato monoam\u00f4nico ou monoamoniacal), mesmo misturado com hidrogeno-ortofosfato de diam\u00f4nio (fosfato diam\u00f4nico ou diamoniacal)",
+        "VL_FOB":2763840014,
+        "KG_LIQUIDO":5202573231
+    },
+    {
+        "NO_NCM_POR":"Naftas para petroquimica",
+        "VL_FOB":2650282171,
+        "KG_LIQUIDO":3678713215
+    },
+    {
+        "NO_NCM_POR":"Ureia, mesmo em solu\u00e7\u00e3o aquosa, com teor de nitrog\u00eanio (azoto) superior a 45 %, em peso, calculado sobre o produto anidro no estado seco",
+        "VL_FOB":2624448001,
+        "KG_LIQUIDO":7314227824
+    }
+]

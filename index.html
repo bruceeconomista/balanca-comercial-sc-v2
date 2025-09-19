@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Balança Comercial de Santa Catarina</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Balança Comercial de Santa Catarina</h1>
+        <p>Dados de Exportação e Importação por ano</p>
+    </header>
+
+    <main>
+        <div class="filter-container">
+            <label for="year-select">Selecione o Ano:</label>
+            <select id="year-select">
+                <option value="2024">2024</option>
+                <option value="2023">2023</option>
+            </select>
+        </div>
+
+        <section id="charts-container">
+            <div class="chart-section">
+                <h2>Produtos Mais Exportados</h2>
+                <div id="exp-products-chart"></div>
+            </div>
+            
+            <div class="chart-section">
+                <h2>Países de Destino (Exportação)</h2>
+                <div id="exp-countries-chart"></div>
+            </div>
+
+            <div class="chart-section">
+                <h2>Produtos Mais Importados</h2>
+                <div id="imp-products-chart"></div>
+            </div>
+            
+            <div class="chart-section">
+                <h2>Países de Origem (Importação)</h2>
+                <div id="imp-countries-chart"></div>
+            </div>
+        </section>
+    </main>
+
+    <script src="main.js"></script>
+</body>
+</html>

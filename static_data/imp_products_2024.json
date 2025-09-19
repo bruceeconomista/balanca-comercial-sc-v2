@@ -1,0 +1,52 @@
+[
+    {
+        "NO_NCM_POR":"\u00d3leos brutos de petr\u00f3leo",
+        "VL_FOB":8690210062,
+        "KG_LIQUIDO":13944653402
+    },
+    {
+        "NO_NCM_POR":"Gas\u00f3leo (\u00f3leo diesel)",
+        "VL_FOB":8359492092,
+        "KG_LIQUIDO":12028127218
+    },
+    {
+        "NO_NCM_POR":"Partes de turborreatores ou de turbopropulsores",
+        "VL_FOB":4837676499,
+        "KG_LIQUIDO":310107
+    },
+    {
+        "NO_NCM_POR":"Outros cloretos de pot\u00e1ssio",
+        "VL_FOB":3606983824,
+        "KG_LIQUIDO":13651091870
+    },
+    {
+        "NO_NCM_POR":"Turborreatores de empuxo superior a 25 kN",
+        "VL_FOB":3418099488,
+        "KG_LIQUIDO":2351149
+    },
+    {
+        "NO_NCM_POR":"Outros produtos imunol\u00f3gicos, apresentados em doses ou acondicionados para venda a retalho",
+        "VL_FOB":3320554118,
+        "KG_LIQUIDO":666234
+    },
+    {
+        "NO_NCM_POR":"Outros ve\u00edculos autom\u00f3veis com motor diesel, para carga <= 5 toneladas",
+        "VL_FOB":3264984879,
+        "KG_LIQUIDO":249046422
+    },
+    {
+        "NO_NCM_POR":"Hulha betuminosa, n\u00e3o aglomerada",
+        "VL_FOB":2837201476,
+        "KG_LIQUIDO":15587414736
+    },
+    {
+        "NO_NCM_POR":"Ureia, mesmo em solu\u00e7\u00e3o aquosa, com teor de nitrog\u00eanio (azoto) superior a 45 %, em peso, calculado sobre o produto anidro no estado seco",
+        "VL_FOB":2687692092,
+        "KG_LIQUIDO":8309735040
+    },
+    {
+        "NO_NCM_POR":"Naftas para petroquimica",
+        "VL_FOB":2628440404,
+        "KG_LIQUIDO":3569294474
+    }
+]
