@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 import plotly.express as px
+from huggingface_hub import hf_hub_download
 
 try:
     st.set_page_config(
@@ -16,27 +17,31 @@ try:
     @st.cache_data(show_spinner=False)
     def load_data():
         """
-        Carrega os dados dos arquivos Parquet a partir das URLs.
-        Usa o cache do Streamlit para evitar recarregar a cada interação.
+        Carrega os dados dos arquivos Parquet usando o huggingface_hub.
+        Esta é a forma mais robusta de garantir o acesso aos arquivos.
         """
         try:
             with st.spinner('Carregando dados, isso pode levar alguns segundos...'):
-                exp_url = "https://huggingface.co/datasets/bruceeconomista/balanca-comercial-sc-v2-dados/resolve/main/EXP_TOTAL.parquet"
-                imp_url = "https://huggingface.co/datasets/bruceeconomista/balanca-comercial-sc-v2-dados/resolve/main/IMP_TOTAL.parquet"
+                repo_id = "bruceeconomista/balanca-comercial-sc-v2-dados"
                 
-                df_exp = pd.read_parquet(exp_url)
-                df_imp = pd.read_parquet(imp_url)
+                # Baixa os arquivos para o cache local do Hugging Face
+                exp_file_path = hf_hub_download(repo_id=repo_id, filename="EXP_TOTAL.parquet", repo_type="dataset")
+                imp_file_path = hf_hub_download(repo_id=repo_id, filename="IMP_TOTAL.parquet", repo_type="dataset")
+
+                # Lê os arquivos do cache local
+                df_exp = pd.read_parquet(exp_file_path)
+                df_imp = pd.read_parquet(imp_file_path)
             
             return df_exp, df_imp
         except Exception as e:
-            st.error(f"Erro ao carregar os dados. Verifique a conexão ou os links dos arquivos: {e}")
+            st.error(f"Erro ao carregar os dados. Verifique a conexão ou os arquivos no repositório: {e}")
             st.stop()
             return pd.DataFrame(), pd.DataFrame()
 
     df_exp, df_imp = load_data()
 
     if df_exp.empty or df_imp.empty:
-        st.warning("Não foi possível carregar os dados. Por favor, verifique se as URLs dos arquivos estão corretas.")
+        st.warning("Não foi possível carregar os dados. Por favor, verifique se os arquivos estão corretos.")
         st.stop()
 
     df_exp['tipo'] = 'Exportação'
