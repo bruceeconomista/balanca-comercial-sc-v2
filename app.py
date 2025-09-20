@@ -21,7 +21,6 @@ def load_data():
         df_exp = pd.read_parquet(URL_EXP)
         df_imp = pd.read_parquet(URL_IMP)
         
-        # Limpar os nomes das colunas e garantir que a codificação está correta (o parquet já resolve a maioria)
         df_exp.columns = [col.replace('ï»¿', '') for col in df_exp.columns]
         df_imp.columns = [col.replace('ï»¿', '') for col in df_imp.columns]
 
@@ -39,7 +38,7 @@ if df_exp.empty or df_imp.empty:
 st.markdown("---")
 col1, col2, col3 = st.columns(3)
 
-# Cálculo dos totais (os dataframes já estão filtrados para SC e 2024)
+# Cálculo dos totais
 total_exp = df_exp['VL_FOB'].sum()
 total_imp = df_imp['VL_FOB'].sum()
 balanca_comercial = total_exp - total_imp
@@ -50,8 +49,14 @@ def format_brl(value, decimals=2):
     return f"{value:,.{decimals}f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def format_currency_br(value):
-    # Formata sem casas decimais, mas com separador de milhar
     return f"US$ {format_brl(value, 0)}"
+
+def format_value(value):
+    if value >= 1_000_000_000:
+        return f"{value / 1_000_000_000:.1f}B"
+    if value >= 1_000_000:
+        return f"{value / 1_000_000:.1f}M"
+    return str(value)
 
 with col1:
     st.metric(
@@ -72,18 +77,10 @@ with col3:
     )
 
 # ---
-## Análise de Produtos e Países por Fluxo
-# ---
+st.header("Análise de Produtos e Países por Fluxo")
 # --- 2. Análise Gráfica (Produtos) ---
 st.markdown("---")
 col4, col5 = st.columns(2)
-
-def format_value(value):
-    if value >= 1_000_000_000:
-        return f"{value / 1_000_000_000:.1f}B"
-    if value >= 1_000_000:
-        return f"{value / 1_000_000:.1f}M"
-    return str(value)
 
 with col4:
     st.subheader("Produtos Mais Exportados")
@@ -182,7 +179,6 @@ st.markdown("---")
 st.header("Fluxo de Exportação e Importação por País (Principais Produtos)")
 col6, col7 = st.columns(2)
 
-# Filtrar o DataFrame por produtos selecionados antes de agrupar para o treemap
 df_exp_filtered_products = df_exp[df_exp['NO_NCM_POR'].isin(top_exp_products)]
 df_imp_filtered_products = df_imp[df_imp['NO_NCM_POR'].isin(top_imp_products)]
 
@@ -241,3 +237,122 @@ with col7:
         st.plotly_chart(fig_imp, use_container_width=True)
     else:
         st.info("Não há dados de importação para a seleção atual.")
+
+# ---
+st.header("Análise Geral de Parceiros Comerciais")
+# --- 4. Tabelas dos Maiores Países e Treemaps Gerais ---
+st.markdown("---")
+col8, col9 = st.columns(2)
+
+with col8:
+    st.subheader(f"Destinos de Exportação (Maiores Países)")
+    if not df_exp.empty:
+        df_exp_agg = df_exp.groupby('NO_PAIS').agg(
+            VL_FOB=('VL_FOB', 'sum'),
+            KG_LIQUIDO=('KG_LIQUIDO', 'sum')
+        ).reset_index()
+        
+        total_fob_exp = df_exp_agg['VL_FOB'].sum()
+        df_exp_agg['Participacao (%)'] = (df_exp_agg['VL_FOB'] / total_fob_exp) * 100
+        df_exp_agg['Preço Médio (US$/Kg)'] = df_exp_agg['VL_FOB'] / df_exp_agg['KG_LIQUIDO']
+        
+        df_pivot_sorted_exp = df_exp_agg.sort_values(by='VL_FOB', ascending=False).reset_index(drop=True)
+        
+        top_10_exp_display = df_pivot_sorted_exp.rename(columns={
+            'NO_PAIS': 'País',
+            'VL_FOB': 'Valor FOB (US$)',
+            'KG_LIQUIDO': 'Total Kg',
+        })
+        
+        st.dataframe(
+            top_10_exp_display[['País', 'Valor FOB (US$)', 'Total Kg', 'Participacao (%)', 'Preço Médio (US$/Kg)']].style.format({
+                'Valor FOB (US$)': lambda x: format_brl(x, 2),
+                'Total Kg': lambda x: format_brl(x, 0),
+                'Participacao (%)': '{:.2f}%',
+                'Preço Médio (US$/Kg)': '{:.2f}',
+            }),
+            use_container_width=True,
+            hide_index=True
+        )
+    else:
+        st.info("Não há dados de exportação para a seleção atual.")
+
+
+with col9:
+    st.subheader(f"Origens de Importação (Maiores Países)")
+    if not df_imp.empty:
+        df_imp_agg = df_imp.groupby('NO_PAIS').agg(
+            VL_FOB=('VL_FOB', 'sum'),
+            KG_LIQUIDO=('KG_LIQUIDO', 'sum')
+        ).reset_index()
+
+        total_fob_imp = df_imp_agg['VL_FOB'].sum()
+        df_imp_agg['Participacao (%)'] = (df_imp_agg['VL_FOB'] / total_fob_imp) * 100
+        df_imp_agg['Preço Médio (US$/Kg)'] = df_imp_agg['VL_FOB'] / df_imp_agg['KG_LIQUIDO']
+
+        df_pivot_sorted_imp = df_imp_agg.sort_values(by='VL_FOB', ascending=False).reset_index(drop=True)
+
+        top_10_imp_display = df_pivot_sorted_imp.rename(columns={
+            'NO_PAIS': 'País',
+            'VL_FOB': 'Valor FOB (US$)',
+            'KG_LIQUIDO': 'Total Kg',
+        })
+        
+        st.dataframe(
+            top_10_imp_display[['País', 'Valor FOB (US$)', 'Total Kg', 'Participacao (%)', 'Preço Médio (US$/Kg)']].style.format({
+                'Valor FOB (US$)': lambda x: format_brl(x, 2),
+                'Total Kg': lambda x: format_brl(x, 0),
+                'Participacao (%)': '{:.2f}%',
+                'Preço Médio (US$/Kg)': '{:.2f}',
+            }),
+            use_container_width=True,
+            hide_index=True
+        )
+    else:
+        st.info("Não há dados de importação para a seleção atual.")
+    
+# --- 5. Treemaps de Países (Visão Geral) ---
+st.markdown("---")
+col10, col11 = st.columns(2)
+
+with col10:
+    st.subheader(f"Exportações (Total Geral) ({selected_year})")
+    df_exp_geral = df_exp.groupby('NO_PAIS').agg(
+        VL_FOB=('VL_FOB', 'sum'),
+        KG_LIQUIDO=('KG_LIQUIDO', 'sum')
+    ).reset_index()
+
+    fig_exp_geral = px.treemap(
+        df_exp_geral,
+        path=['NO_PAIS'],
+        values='VL_FOB',
+        title=f'Destinos de Exportações por País (Todos os Produtos) ({selected_year})',
+        color_discrete_sequence=px.colors.qualitative.D3,
+        hover_name='NO_PAIS',
+        hover_data={
+            'VL_FOB': ':,2f',
+            'KG_LIQUIDO': ':,0f'
+        }
+    )
+    st.plotly_chart(fig_exp_geral, use_container_width=True)
+
+with col11:
+    st.subheader(f"Importações (Total Geral) ({selected_year})")
+    df_imp_geral = df_imp.groupby('NO_PAIS').agg(
+        VL_FOB=('VL_FOB', 'sum'),
+        KG_LIQUIDO=('KG_LIQUIDO', 'sum')
+    ).reset_index()
+
+    fig_imp_geral = px.treemap(
+        df_imp_geral,
+        path=['NO_PAIS'],
+        values='VL_FOB',
+        title=f'Origens das Importações por País (Todos os Produtos) ({selected_year})',
+        color_discrete_sequence=px.colors.qualitative.D3,
+        hover_name='NO_PAIS',
+        hover_data={
+            'VL_FOB': ':,2f',
+            'KG_LIQUIDO': ':,0f'
+        }
+    )
+    st.plotly_chart(fig_imp_geral, use_container_width=True)
