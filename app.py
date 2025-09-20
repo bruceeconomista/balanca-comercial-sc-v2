@@ -10,39 +10,39 @@ st.set_page_config(
 
 st.title("Balança Comercial de Santa Catarina - 2024")
 
-# URLs dos arquivos no Hugging Face
-URL_EXP = "https://huggingface.co/datasets/bruceeconomista/balanca-comercial-sc-v2-dados/resolve/main/exp_sc_2024.parquet"
-URL_IMP = "https://huggingface.co/datasets/bruceeconomista/balanca-comercial-sc-v2-dados/resolve/main/imp_sc_2024.parquet"
+# URLs dos arquivos no Hugging Face (2024 e 2023)
+URL_EXP_2024 = "https://huggingface.co/datasets/bruceeconomista/balanca-comercial-sc-v2-dados/resolve/main/exp_sc_2024.parquet"
+URL_IMP_2024 = "https://huggingface.co/datasets/bruceeconomista/balanca-comercial-sc-v2-dados/resolve/main/imp_sc_2024.parquet"
+URL_EXP_2023 = "https://huggingface.co/datasets/bruceeconomista/balanca-comercial-sc-v2-dados/resolve/main/exp_sc_2023.parquet"
+URL_IMP_2023 = "https://huggingface.co/datasets/bruceeconomista/balanca-comercial-sc-v2-dados/resolve/main/imp_sc_2023.parquet"
 
 @st.cache_data
 def load_data():
-    """Carrega os dados dos arquivos Parquet do Hugging Face."""
+    """Carrega os dados de 2024 e 2023 e calcula as variações interanuais."""
     try:
-        df_exp = pd.read_parquet(URL_EXP)
-        df_imp = pd.read_parquet(URL_IMP)
-        
-        df_exp.columns = [col.replace('ï»¿', '') for col in df_exp.columns]
-        df_imp.columns = [col.replace('ï»¿', '') for col in df_imp.columns]
+        # Carrega os dados de 2024
+        df_exp_2024 = pd.read_parquet(URL_EXP_2024)
+        df_imp_2024 = pd.read_parquet(URL_IMP_2024)
 
-        return df_exp, df_imp
+        # Carrega os dados de 2023
+        df_exp_2023 = pd.read_parquet(URL_EXP_2023)
+        df_imp_2023 = pd.read_parquet(URL_IMP_2023)
+
+        # Trata os nomes das colunas
+        df_exp_2024.columns = [col.replace('ï»¿', '') for col in df_exp_2024.columns]
+        df_imp_2024.columns = [col.replace('ï»¿', '') for col in df_imp_2024.columns]
+        df_exp_2023.columns = [col.replace('ï»¿', '') for col in df_exp_2023.columns]
+        df_imp_2023.columns = [col.replace('ï»¿', '') for col in df_imp_2023.columns]
+
+        return df_exp_2024, df_imp_2024, df_exp_2023, df_imp_2023
     except Exception as e:
         st.error(f"Erro ao carregar os dados do Hugging Face: {e}")
-        return pd.DataFrame(), pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-df_exp, df_imp = load_data()
+df_exp, df_imp, df_exp_2023, df_imp_2023 = load_data()
 
-if df_exp.empty or df_imp.empty:
+if df_exp.empty or df_imp.empty or df_exp_2023.empty or df_imp_2023.empty:
     st.stop()
-
-# --- 1. Cards de resumo ---
-st.markdown("---")
-col1, col2, col3 = st.columns(3)
-
-# Cálculo dos totais
-total_exp = df_exp['VL_FOB'].sum()
-total_imp = df_imp['VL_FOB'].sum()
-balanca_comercial = total_exp - total_imp
-selected_year = 2024
 
 # Funções de formatação
 def format_brl(value, decimals=2):
@@ -57,6 +57,16 @@ def format_value(value):
     if value >= 1_000_000:
         return f"{value / 1_000_000:.1f}M"
     return str(value)
+
+# --- 1. Cards de resumo ---
+st.markdown("---")
+col1, col2, col3 = st.columns(3)
+
+# Cálculo dos totais
+total_exp = df_exp['VL_FOB'].sum()
+total_imp = df_imp['VL_FOB'].sum()
+balanca_comercial = total_exp - total_imp
+selected_year = 2024
 
 with col1:
     st.metric(
@@ -244,32 +254,65 @@ st.header("Análise Geral de Parceiros Comerciais")
 st.markdown("---")
 col8, col9 = st.columns(2)
 
+# Lógica de cálculo de variações para as tabelas
+def calculate_variations(df_current, df_previous):
+    df_current_agg = df_current.groupby('NO_PAIS').agg(
+        VL_FOB_2024=('VL_FOB', 'sum'),
+        KG_LIQUIDO_2024=('KG_LIQUIDO', 'sum')
+    ).reset_index()
+
+    df_previous_agg = df_previous.groupby('NO_PAIS').agg(
+        VL_FOB_2023=('VL_FOB', 'sum'),
+        KG_LIQUIDO_2023=('KG_LIQUIDO', 'sum')
+    ).reset_index()
+
+    # Juntar os dois anos
+    df_merged = pd.merge(df_current_agg, df_previous_agg, on='NO_PAIS', how='outer').fillna(0)
+
+    # Calcular o preço médio para ambos os anos
+    df_merged['Preço Médio 2024'] = df_merged['VL_FOB_2024'] / df_merged['KG_LIQUIDO_2024']
+    df_merged['Preço Médio 2023'] = df_merged['VL_FOB_2023'] / df_merged['KG_LIQUIDO_2023']
+
+    # Calcular as variações
+    df_merged['Variação (%) FOB'] = ((df_merged['VL_FOB_2024'] - df_merged['VL_FOB_2023']) / df_merged['VL_FOB_2023'] * 100).fillna(0)
+    df_merged['Variação (%) Kg'] = ((df_merged['KG_LIQUIDO_2024'] - df_merged['KG_LIQUIDO_2023']) / df_merged['KG_LIQUIDO_2023'] * 100).fillna(0)
+    df_merged['Variação (%) Preço Médio'] = ((df_merged['Preço Médio 2024'] - df_merged['Preço Médio 2023']) / df_merged['Preço Médio 2023'] * 100).fillna(0)
+    
+    # Substituir Infinitos por 100 para casos de 0 para 2023
+    df_merged.replace([float('inf'), float('-inf')], 100, inplace=True)
+    
+    return df_merged
+
+# Cálculo para Exportações
+df_exp_variations = calculate_variations(df_exp, df_exp_2023)
+total_fob_exp = df_exp_variations['VL_FOB_2024'].sum()
+df_exp_variations['Participacao (%)'] = (df_exp_variations['VL_FOB_2024'] / total_fob_exp) * 100
+df_exp_variations_sorted = df_exp_variations.sort_values(by='VL_FOB_2024', ascending=False).reset_index(drop=True)
+
+# Cálculo para Importações
+df_imp_variations = calculate_variations(df_imp, df_imp_2023)
+total_fob_imp = df_imp_variations['VL_FOB_2024'].sum()
+df_imp_variations['Participacao (%)'] = (df_imp_variations['VL_FOB_2024'] / total_fob_imp) * 100
+df_imp_variations_sorted = df_imp_variations.sort_values(by='VL_FOB_2024', ascending=False).reset_index(drop=True)
+
 with col8:
     st.subheader(f"Destinos de Exportação (Maiores Países)")
     if not df_exp.empty:
-        df_exp_agg = df_exp.groupby('NO_PAIS').agg(
-            VL_FOB=('VL_FOB', 'sum'),
-            KG_LIQUIDO=('KG_LIQUIDO', 'sum')
-        ).reset_index()
-        
-        total_fob_exp = df_exp_agg['VL_FOB'].sum()
-        df_exp_agg['Participacao (%)'] = (df_exp_agg['VL_FOB'] / total_fob_exp) * 100
-        df_exp_agg['Preço Médio (US$/Kg)'] = df_exp_agg['VL_FOB'] / df_exp_agg['KG_LIQUIDO']
-        
-        df_pivot_sorted_exp = df_exp_agg.sort_values(by='VL_FOB', ascending=False).reset_index(drop=True)
-        
-        top_10_exp_display = df_pivot_sorted_exp.rename(columns={
-            'NO_PAIS': 'País',
-            'VL_FOB': 'Valor FOB (US$)',
-            'KG_LIQUIDO': 'Total Kg',
-        })
-        
         st.dataframe(
-            top_10_exp_display[['País', 'Valor FOB (US$)', 'Total Kg', 'Participacao (%)', 'Preço Médio (US$/Kg)']].style.format({
+            df_exp_variations_sorted.rename(columns={
+                'NO_PAIS': 'País',
+                'VL_FOB_2024': 'Valor FOB (US$)',
+                'KG_LIQUIDO_2024': 'Total Kg',
+                'Preço Médio 2024': 'Preço Médio (US$/Kg)'
+            })[['País', 'Valor FOB (US$)', 'Total Kg', 'Participacao (%)', 'Preço Médio (US$/Kg)',
+                'Variação (%) FOB', 'Variação (%) Kg', 'Variação (%) Preço Médio']].style.format({
                 'Valor FOB (US$)': lambda x: format_brl(x, 2),
                 'Total Kg': lambda x: format_brl(x, 0),
                 'Participacao (%)': '{:.2f}%',
                 'Preço Médio (US$/Kg)': '{:.2f}',
+                'Variação (%) FOB': '{:.2f}%',
+                'Variação (%) Kg': '{:.2f}%',
+                'Variação (%) Preço Médio': '{:.2f}%',
             }),
             use_container_width=True,
             hide_index=True
@@ -277,40 +320,31 @@ with col8:
     else:
         st.info("Não há dados de exportação para a seleção atual.")
 
-
 with col9:
     st.subheader(f"Origens de Importação (Maiores Países)")
     if not df_imp.empty:
-        df_imp_agg = df_imp.groupby('NO_PAIS').agg(
-            VL_FOB=('VL_FOB', 'sum'),
-            KG_LIQUIDO=('KG_LIQUIDO', 'sum')
-        ).reset_index()
-
-        total_fob_imp = df_imp_agg['VL_FOB'].sum()
-        df_imp_agg['Participacao (%)'] = (df_imp_agg['VL_FOB'] / total_fob_imp) * 100
-        df_imp_agg['Preço Médio (US$/Kg)'] = df_imp_agg['VL_FOB'] / df_imp_agg['KG_LIQUIDO']
-
-        df_pivot_sorted_imp = df_imp_agg.sort_values(by='VL_FOB', ascending=False).reset_index(drop=True)
-
-        top_10_imp_display = df_pivot_sorted_imp.rename(columns={
-            'NO_PAIS': 'País',
-            'VL_FOB': 'Valor FOB (US$)',
-            'KG_LIQUIDO': 'Total Kg',
-        })
-        
         st.dataframe(
-            top_10_imp_display[['País', 'Valor FOB (US$)', 'Total Kg', 'Participacao (%)', 'Preço Médio (US$/Kg)']].style.format({
+            df_imp_variations_sorted.rename(columns={
+                'NO_PAIS': 'País',
+                'VL_FOB_2024': 'Valor FOB (US$)',
+                'KG_LIQUIDO_2024': 'Total Kg',
+                'Preço Médio 2024': 'Preço Médio (US$/Kg)'
+            })[['País', 'Valor FOB (US$)', 'Total Kg', 'Participacao (%)', 'Preço Médio (US$/Kg)',
+                'Variação (%) FOB', 'Variação (%) Kg', 'Variação (%) Preço Médio']].style.format({
                 'Valor FOB (US$)': lambda x: format_brl(x, 2),
                 'Total Kg': lambda x: format_brl(x, 0),
                 'Participacao (%)': '{:.2f}%',
                 'Preço Médio (US$/Kg)': '{:.2f}',
+                'Variação (%) FOB': '{:.2f}%',
+                'Variação (%) Kg': '{:.2f}%',
+                'Variação (%) Preço Médio': '{:.2f}%',
             }),
             use_container_width=True,
             hide_index=True
         )
     else:
         st.info("Não há dados de importação para a seleção atual.")
-    
+
 # --- 5. Treemaps de Países (Visão Geral) ---
 st.markdown("---")
 col10, col11 = st.columns(2)
